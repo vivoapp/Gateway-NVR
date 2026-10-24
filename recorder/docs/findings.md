@@ -141,3 +141,21 @@ The cameras' H.265 has non-conforming reference picture sets. ffmpeg's own HEVC 
 the CPU and VAAPI paths) complains about them, and on VAAPI the bad references end in a failed
 surface sync. Intel's QSV decoder handles the stream. Fix: `site.hwaccel: preset-intel-qsv-h265`
 in `cameras.yaml`. `tests/m2_check.py` now also fails on any ffmpeg crash in the last 10 minutes.
+
+## F10: where the CPU goes with ten cameras (Oct 23, 2026, before M6 tuning)
+
+The whole gateway averages about 42 % of its four cores (about 1.7 cores) with all ten cameras
+recording and detection off; RAM about 3.5 GB of 11.5 GB. From Frigate's per-process stats
+(percent of one core):
+
+| Part | CPU | Why |
+|---|---|---|
+| Detect-stream decoders (10 ffmpeg, Intel QSV) | about 53 % | the cameras send 25 fps on the substream; Frigate uses 5 fps but decodes all 25 |
+| One Frigate main process | about 43 % | not yet identified |
+| Recording ffmpeg (10) | about 30 % | G.711 audio transcoded to AAC for MP4; video is copied |
+| Per-camera processes (10) | about 22 % | frame handling at 5 fps |
+| go2rtc | about 18 % | ten cameras, two streams each, plus restream clients |
+
+M6 candidates: lower the substream to 5 to 10 fps on the cameras (also changes the cloud segments,
+so Vivo decides), record without audio if Vivo does not need it, and identify the busy Frigate
+process. Haris's uploader and agent are planned at about one core and 1 GB, with limits.
