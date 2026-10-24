@@ -33,3 +33,7 @@
   lookups of disks that are not volumes yet. New `tests/m3_watch.py`: records camera power cycles done
   by hand on site (drop, camera back, stream back, recording back), tested with a simulated cam10
   outage (gateway reconnect 1 s); running for 48 h for Vivo's M3 test.
+- Reboot proof on the reference gateway (Oct 24, 12:44 UTC): SSH back in 58 s, all ten cameras
+  recording again 61 to 62 s after the reboot command, M1 16/16 and M2 13/13 on the new boot.
+  M3 reconnect proven from the recordings (`tests/m3_gaps_report.py`): 10 of 10 cameras, gaps 43 to
+  63 s. All Milestone 1 results on one page: docs/milestone-1-results.md.
