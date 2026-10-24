@@ -1,0 +1,82 @@
+# Vivo gateway recorder stack: go2rtc (camera restream) + Frigate (recording).
+#
+# Run through bin/vivo-compose, which loads versions.env and /etc/vivo/site.env:
+#   bin/vivo-compose up -d
+#
+# Images are pinned by tag AND digest (versions.env). Secrets come from
+# /etc/vivo/secrets.env (root, mode 600), never from this repository.
+# VIVO_ETC overrides /etc/vivo (used only for lab tests).
+
+name: vivo-gateway
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
+services:
+  go2rtc:
+    image: ${GO2RTC_IMAGE}:${GO2RTC_VERSION}@${GO2RTC_DIGEST}
+    container_name: go2rtc
+    restart: unless-stopped
+    env_file:
+      - ${VIVO_ETC:-/etc/vivo}/secrets.env
+      - ${VIVO_ETC:-/etc/vivo}/site.env
+    volumes:
+      # Read-only: streams cannot be added or changed from the go2rtc web UI.
+      - type: bind
+        source: ./go2rtc/go2rtc.yaml
+        target: /config/go2rtc.yaml
+        read_only: true
+    ports:
+      - "1984:1984"        # web UI, API, MSE/HLS live view (LAN only, see firewall)
+      - "8554:8554"        # RTSP restream (LAN only, password protected)
+      - "8555:8555/tcp"    # WebRTC
+      - "8555:8555/udp"    # WebRTC
+    logging: *logging
+
+  frigate:
+    image: ${FRIGATE_IMAGE}:${FRIGATE_VERSION}@${FRIGATE_DIGEST}
+    container_name: frigate
+    restart: unless-stopped
+    depends_on:
+      - go2rtc
+    stop_grace_period: 30s
+    # Frigate formula: 50 MB + 20 x (detect frame sizes + 2 spare 720p slots).
+    # 10 cameras at 640x360 need about 234 MB.
+    shm_size: "256mb"
+    env_file:
+      - ${VIVO_ETC:-/etc/vivo}/secrets.env
+    environment:
+      TZ: UTC
+    devices:
+      - /dev/dri/renderD128:/dev/dri/renderD128   # Intel Quick Sync / VAAPI decoding
+    volumes:
+      # Runtime state (database, caches) lives on the recording disk.
+      # Long syntax: Docker refuses to start the container if the source path is
+      # missing, instead of silently creating it on the OS disk.
+      - type: bind
+        source: ${MEDIA_ROOT}/frigate/state
+        target: /config
+        bind:
+          create_host_path: false
+      # The repository config is the single source of truth (read-only).
+      - type: bind
+        source: ./frigate/config.yml
+        target: /config/config.yml
+        read_only: true
+      - type: bind
+        source: ${MEDIA_ROOT}/frigate/media
+        target: /media/frigate
+        bind:
+          create_host_path: false
+      # Segments are written here first, then moved to the recording disk.
+      - type: tmpfs
+        target: /tmp/cache
+        tmpfs:
+          size: 1000000000
+    ports:
+      - "8971:8971"              # authenticated UI and API (LAN only, see firewall)
+      - "127.0.0.1:5000:5000"    # unauthenticated internal API: gateway only
+    logging: *logging

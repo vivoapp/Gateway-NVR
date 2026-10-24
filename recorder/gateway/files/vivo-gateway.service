@@ -1,0 +1,19 @@
+# Vivo gateway recorder stack (go2rtc + Frigate). Installed by gateway/setup.sh.
+# Containers also have restart: unless-stopped, so Docker restarts them if they
+# crash; this unit makes sure the stack is brought up on every boot.
+[Unit]
+Description=Vivo gateway recorder stack (go2rtc + Frigate)
+Requires=docker.service
+After=docker.service network-online.target @MEDIA_MOUNT@
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=@INSTALL_DIR@
+ExecStart=@INSTALL_DIR@/bin/vivo-compose up -d --remove-orphans
+ExecStop=@INSTALL_DIR@/bin/vivo-compose stop
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target

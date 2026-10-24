@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Docker Compose with the pinned versions and the site settings loaded.
+# usage: bin/vivo-compose <compose args>   e.g.  bin/vivo-compose up -d
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export VIVO_ETC="${VIVO_ETC:-/etc/vivo}"
+SITE_ENV="$VIVO_ETC/site.env"
+[[ -r "$SITE_ENV" ]] || { echo "missing $SITE_ENV (copy site.env.example)" >&2; exit 1; }
+exec docker compose --project-directory "$ROOT" -f "$ROOT/compose.yaml" \
+  --env-file "$ROOT/versions.env" --env-file "$SITE_ENV" "$@"

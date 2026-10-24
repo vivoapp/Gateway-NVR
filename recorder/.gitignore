@@ -1,0 +1,9 @@
+# Real settings and passwords live in /etc/vivo, never here
+secrets.env
+site.env
+*.local.yaml
+cameras.lab.yaml
+# Test output (reports are attached to milestone reviews, not committed)
+reports/
+__pycache__/
+.DS_Store

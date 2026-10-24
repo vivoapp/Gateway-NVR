@@ -1,0 +1,13 @@
+# BEGIN VIVO DOCKER-USER
+# Docker-published ports (go2rtc 1984/8554/8555, Frigate 8971) bypass ufw's
+# INPUT rules, so they are filtered here: only the allowed networks get in.
+# Managed by gateway/setup.sh; edit site.env (LAN_CIDRS, ADMIN_CIDRS) instead.
+*filter
+:DOCKER-USER - [0:0]
+-A DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+-A DOCKER-USER -i docker0 -j RETURN
+-A DOCKER-USER -i br-+ -j RETURN
+@ALLOWED_NETWORKS@
+-A DOCKER-USER -j DROP
+COMMIT
+# END VIVO DOCKER-USER

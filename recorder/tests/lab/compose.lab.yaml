@@ -1,0 +1,6 @@
+# Lab override for hosts without an Intel GPU (for example a Jetson or a laptop).
+# Used only for testing the stack and scripts with real cameras before the gateway exists:
+#   docker compose -f compose.yaml -f tests/lab/compose.lab.yaml --env-file versions.env --env-file $VIVO_ETC/site.env up -d
+services:
+  frigate:
+    devices: !reset []

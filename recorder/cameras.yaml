@@ -1,0 +1,142 @@
+# Camera inventory for the Vivo reference gateway (Intel N150, Vivo office rack).
+#
+# This is the only camera file people edit. Run `tools/gen_config.py` after any
+# change; it regenerates go2rtc/go2rtc.yaml and frigate/config.yml.
+#
+# No secrets here. All ten test cameras share one login, kept in /etc/vivo/secrets.env
+# as VIVOCAM_USER and VIVOCAM_PASSWORD (see secrets.env.example).
+#
+# Hosts and names from Vivo (Oct 22, 2026). Do not change camera IPs or hostnames: Vivo assigned
+# them for this development environment. Paths, model and firmware come from tools/onvif_probe.py.
+
+site:
+  record_days: 7               # continuous main-stream retention (M9 tunes this)
+  # Intel QSV for H.265: these cameras' H.265 trips ffmpeg's own HEVC parser ("Error constructing
+  # the frame RPS"), which makes VAAPI decoding crash; QSV decodes it cleanly (docs/findings.md F9).
+  # If the cameras are switched to H.264, use preset-intel-qsv-h264 (or preset-vaapi).
+  hwaccel: preset-intel-qsv-h265
+  detect:                      # detection is off; Frigate still decodes this stream at low cost
+    width: 640
+    height: 360
+    fps: 5
+
+cameras:
+  - id: cam01                  # lowercase letters, digits and _ only; used in stream and file names
+    name: VIVO-CAM-01
+    host: 192.168.30.201
+    port: 554
+    main_path: /media/live/1/1  # H.264 2880x1620 25 fps 6000 kbps, GOP 100 (ONVIF profile 0001)
+    sub_path: /media/live/1/2   # H.264 640x360 25 fps 500 kbps (profile 0002)
+    credentials: VIVOCAM       # -> VIVOCAM_USER / VIVOCAM_PASSWORD
+    audio: aac                 # camera sends G.711 8 kHz, so transcode to AAC for MP4
+    model: "A_ONVIF_CAMERA N501"
+    firmware: "V1.0.4.12-build:20260203164758"
+    notes: ""
+
+  - id: cam02                  # lowercase letters, digits and _ only; used in stream and file names
+    name: VIVO-CAM-02
+    host: 192.168.30.202
+    port: 554
+    main_path: /media/live/1/1  # H.264 2880x1620 25 fps 6000 kbps, GOP 100 (ONVIF profile 0001)
+    sub_path: /media/live/1/2   # H.264 640x360 25 fps 500 kbps (profile 0002)
+    credentials: VIVOCAM       # -> VIVOCAM_USER / VIVOCAM_PASSWORD
+    audio: aac                 # camera sends G.711 8 kHz, so transcode to AAC for MP4
+    model: "A_ONVIF_CAMERA N501"
+    firmware: "V1.0.4.12-build:20260203164758"
+    notes: ""
+
+  - id: cam03                  # lowercase letters, digits and _ only; used in stream and file names
+    name: VIVO-CAM-03
+    host: 192.168.30.203
+    port: 554
+    main_path: /media/live/1/1  # H.264 2880x1620 25 fps 6000 kbps, GOP 100 (ONVIF profile 0001)
+    sub_path: /media/live/1/2   # H.264 640x360 25 fps 500 kbps (profile 0002)
+    credentials: VIVOCAM       # -> VIVOCAM_USER / VIVOCAM_PASSWORD
+    audio: aac                 # camera sends G.711 8 kHz, so transcode to AAC for MP4
+    model: "A_ONVIF_CAMERA N501"
+    firmware: "V1.0.4.12-build:20260203164758"
+    notes: ""
+
+  - id: cam04                  # lowercase letters, digits and _ only; used in stream and file names
+    name: VIVO-CAM-04
+    host: 192.168.30.204
+    port: 554
+    main_path: /media/live/1/1  # H.264 2880x1620 25 fps 6000 kbps, GOP 100 (ONVIF profile 0001)
+    sub_path: /media/live/1/2   # H.264 640x360 25 fps 500 kbps (profile 0002)
+    credentials: VIVOCAM       # -> VIVOCAM_USER / VIVOCAM_PASSWORD
+    audio: aac                 # camera sends G.711 8 kHz, so transcode to AAC for MP4
+    model: "A_ONVIF_CAMERA N501"
+    firmware: "V1.0.4.12-build:20260203164758"
+    notes: ""
+
+  - id: cam05                  # lowercase letters, digits and _ only; used in stream and file names
+    name: VIVO-CAM-05
+    host: 192.168.30.205
+    port: 554
+    main_path: /media/live/1/1  # H.264 2880x1620 25 fps 6000 kbps, GOP 100 (ONVIF profile 0001)
+    sub_path: /media/live/1/2   # H.264 640x360 25 fps 500 kbps (profile 0002)
+    credentials: VIVOCAM       # -> VIVOCAM_USER / VIVOCAM_PASSWORD
+    audio: aac                 # camera sends G.711 8 kHz, so transcode to AAC for MP4
+    model: "A_ONVIF_CAMERA N501"
+    firmware: "V1.0.4.12-build:20260203164758"
+    notes: ""
+
+  - id: cam06                  # lowercase letters, digits and _ only; used in stream and file names
+    name: VIVO-CAM-06
+    host: 192.168.30.206
+    port: 554
+    main_path: /media/live/1/1  # H.264 2880x1620 25 fps 6000 kbps, GOP 100 (ONVIF profile 0001)
+    sub_path: /media/live/1/2   # H.264 640x360 25 fps 500 kbps (profile 0002)
+    credentials: VIVOCAM       # -> VIVOCAM_USER / VIVOCAM_PASSWORD
+    audio: aac                 # camera sends G.711 8 kHz, so transcode to AAC for MP4
+    model: "A_ONVIF_CAMERA N501"
+    firmware: "V1.0.4.12-build:20260203164758"
+    notes: ""
+
+  - id: cam07                  # lowercase letters, digits and _ only; used in stream and file names
+    name: VIVO-CAM-07
+    host: 192.168.30.207
+    port: 554
+    main_path: /media/live/1/1  # H.264 2880x1620 25 fps 6000 kbps, GOP 100 (ONVIF profile 0001)
+    sub_path: /media/live/1/2   # H.264 640x360 25 fps 500 kbps (profile 0002)
+    credentials: VIVOCAM       # -> VIVOCAM_USER / VIVOCAM_PASSWORD
+    audio: aac                 # camera sends G.711 8 kHz, so transcode to AAC for MP4
+    model: "A_ONVIF_CAMERA N501"
+    firmware: "V1.0.4.12-build:20260203164758"
+    notes: ""
+
+  - id: cam08                  # lowercase letters, digits and _ only; used in stream and file names
+    name: VIVO-CAM-08
+    host: 192.168.30.208
+    port: 554
+    main_path: /media/live/1/1  # H.264 2880x1620 25 fps 6000 kbps, GOP 100 (ONVIF profile 0001)
+    sub_path: /media/live/1/2   # H.264 640x360 25 fps 500 kbps (profile 0002)
+    credentials: VIVOCAM       # -> VIVOCAM_USER / VIVOCAM_PASSWORD
+    audio: aac                 # camera sends G.711 8 kHz, so transcode to AAC for MP4
+    model: "A_ONVIF_CAMERA N501"
+    firmware: "V1.0.4.12-build:20260203164758"
+    notes: ""
+
+  - id: cam09                  # lowercase letters, digits and _ only; used in stream and file names
+    name: VIVO-CAM-09
+    host: 192.168.30.209
+    port: 554
+    main_path: /media/live/1/1  # H.264 2880x1620 25 fps 6000 kbps, GOP 100 (ONVIF profile 0001)
+    sub_path: /media/live/1/2   # H.264 640x360 25 fps 500 kbps (profile 0002)
+    credentials: VIVOCAM       # -> VIVOCAM_USER / VIVOCAM_PASSWORD
+    audio: aac                 # camera sends G.711 8 kHz, so transcode to AAC for MP4
+    model: "A_ONVIF_CAMERA N501"
+    firmware: "V1.0.4.12-build:20260203164758"
+    notes: ""
+
+  - id: cam10                  # lowercase letters, digits and _ only; used in stream and file names
+    name: VIVO-CAM-10
+    host: 192.168.30.210
+    port: 554
+    main_path: /media/live/1/1  # H.264 2880x1620 25 fps 6000 kbps, GOP 100 (ONVIF profile 0001)
+    sub_path: /media/live/1/2   # H.264 640x360 25 fps 500 kbps (profile 0002)
+    credentials: VIVOCAM       # -> VIVOCAM_USER / VIVOCAM_PASSWORD
+    audio: aac                 # camera sends G.711 8 kHz, so transcode to AAC for MP4
+    model: "A_ONVIF_CAMERA N501"
+    firmware: "V1.0.4.12-build:20260203164758"
+    notes: ""
