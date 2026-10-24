@@ -9,13 +9,22 @@ csv="$(mktemp)"
 echo "utc,cpu_pct,mem_used_mb,temp_c" > "$csv"
 
 cpu_snapshot() { awk '/^cpu / {idle=$5+$6; total=0; for (i=2;i<=NF;i++) total+=$i; print idle, total}' /proc/stat; }
+# CPU package temperature: the coretemp "Package id 0" sensor first, then the CPU thermal zones.
+# acpitz is a fixed board sensor on many mini PCs (27 C on the N150 while the CPU was at 46 C),
+# so it is only the last resort.
 temp_c() {
-  local best=""
-  for z in /sys/class/thermal/thermal_zone*; do
-    [[ -r "$z/temp" ]] || continue
-    case "$(cat "$z/type" 2>/dev/null)" in x86_pkg_temp|TCPU|acpitz|*cpu*) best="$(cat "$z/temp")"; break ;; esac
+  local h z want t=""
+  for h in /sys/class/hwmon/hwmon*; do
+    [[ "$(cat "$h/name" 2>/dev/null)" == coretemp ]] && t="$(cat "$h/temp1_input" 2>/dev/null)" && [[ -n "$t" ]] && break
   done
-  [[ -n "$best" ]] && awk -v t="$best" 'BEGIN {printf "%.1f", t/1000}' || echo ""
+  if [[ -z "$t" ]]; then
+    for want in x86_pkg_temp TCPU acpitz; do
+      for z in /sys/class/thermal/thermal_zone*; do
+        [[ "$(cat "$z/type" 2>/dev/null)" == "$want" ]] && t="$(cat "$z/temp" 2>/dev/null)" && [[ -n "$t" ]] && break 2
+      done
+    done
+  fi
+  [[ -n "$t" ]] && awk -v t="$t" 'BEGIN {printf "%.1f", t/1000}' || echo ""
 }
 
 echo "Sampling every ${STEP}s for ${MIN} min..."
