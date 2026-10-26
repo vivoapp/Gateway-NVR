@@ -16,6 +16,8 @@ Agreements between the parts. Change them only by written agreement between the 
 
 - [Substream segment format](recorder/docs/SEGMENT_FORMAT.md): the recorder writes one-minute
   substream segments that the cloud uploader reads (`/srv/vivo/recordings/substream`).
+- [Sharing the gateway](recorder/docs/shared-gateway.md): how other services reach the recorder
+  (camera list, go2rtc, Frigate API), their accounts, and the rules on the shared gateway.
 
 ## Rules for everyone
 
