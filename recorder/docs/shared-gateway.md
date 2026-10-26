@@ -25,8 +25,9 @@ reach the recorder over the gateway's LAN address, because separate Docker daemo
 
 - Frigate user `video_api`, role **viewer**, created Oct 26, 2026 for the Video API. Checked: it can log in on
   port 8971 and read recordings, stats, HLS playback (`/vod/`) and `clip.mp4`; it can also start export jobs
-  (`POST /api/export/...`); admin-only calls such as the user list are refused (403). Its password, with the
-  go2rtc and restream logins, is in `/etc/vivo/video-api.env`.
+  (`POST /api/export/...`) but cannot delete them (`POST /api/exports/delete` needs the admin role); admin-only
+  calls such as the user list are refused (403). Its password, with the go2rtc and restream logins, is in
+  `/etc/vivo/video-api.env`.
 - go2rtc has one API login and one restream login, shared with services that need them. Changing them means
   updating `/etc/vivo/secrets.env` and every service file that copies them.
 
@@ -36,6 +37,10 @@ reach the recorder over the gateway's LAN address, because separate Docker daemo
   connection per stream.
 - Use the recorder's APIs read only. Do not change go2rtc or Frigate settings through their APIs or the Frigate
   UI; the repository config is the only source of truth. Ask the recorder owner for changes.
+- The one allowed exception: the Video API may start Frigate export jobs. Prefer `clip.mp4` for downloads (built
+  on request, nothing kept on disk). Name kept exports with a `videoapi-` prefix. Exports use the recording disk
+  and a viewer cannot delete them, so the recorder deletes old exports (automatic cleanup is part of M8; until
+  then, ask the recorder owner).
 - Exports and clips cost CPU and disk: queue them instead of running many at once.
 - Keep ports 1984, 8554, 8971 and 5000 on the LAN. Anything offered outside goes through the service's own
   authenticated interface.
