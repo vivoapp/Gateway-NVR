@@ -1,3 +1,5 @@
+> Historical note from the technical evaluation. It describes the first version, not the current M19/M20 code (see README.md and CHANGELOG.md).
+
 # Engineering note: Segment Uploader
 
 Candidate: Haris H

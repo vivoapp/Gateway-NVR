@@ -12,7 +12,6 @@ def write_config(tmp_path, cfg, extra=""):
 [service]
 watch_dir = "{cfg.watch_dir.as_posix()}"
 state_db = "{cfg.state_db.as_posix()}"
-delete_after_upload = false
 {extra}
 [s3]
 endpoint_url = "{cfg.endpoint_url}"
@@ -27,7 +26,6 @@ secret_key = "test"
 def test_status_brief_reports_counts_local_files_and_bucket_objects(cfg, s3, new_service, tmp_path, capsys):
     write_segment(cfg, seg_rel("cam01", 1), os.urandom(1000))
     write_segment(cfg, seg_rel("cam01", 2) + ".part", os.urandom(1000))      # not a finished file
-    cfg.delete_after_upload = False
     step(new_service())
 
     assert main(["status", "--brief", "--config", str(write_config(tmp_path, cfg))]) == 0
@@ -46,13 +44,10 @@ def test_status_brief_says_unreachable_when_storage_is_down(cfg, s3, tmp_path, c
 
 def test_environment_overrides_win_over_the_file(cfg, tmp_path, monkeypatch):
     config_file = write_config(tmp_path, cfg)
-    assert load_config(config_file).delete_after_upload is False
 
-    monkeypatch.setenv("DELETE_AFTER_UPLOAD", "true")
     monkeypatch.setenv("S3_ENDPOINT_URL", "http://minio:9000")
     monkeypatch.setenv("S3_ACCESS_KEY", "from-env")
     loaded = load_config(config_file)
-    assert loaded.delete_after_upload is True
     assert loaded.endpoint_url == "http://minio:9000"
     assert loaded.access_key == "from-env"
 

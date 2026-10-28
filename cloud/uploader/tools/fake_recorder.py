@@ -24,6 +24,8 @@ def main() -> None:
     ap.add_argument("--interval", type=float, default=3.0, help="seconds between segments")
     ap.add_argument("--size-mb", type=float, default=2.0)
     ap.add_argument("--count", type=int, default=0, help="segments per camera (0 = run forever)")
+    ap.add_argument("--retain-minutes", type=float, default=0,
+                    help="delete own segments older than this, like the recorder's retention (0 = keep all)")
     args = ap.parse_args()
 
     root = Path(args.dir)
@@ -43,6 +45,11 @@ def main() -> None:
                         f.write(os.urandom(1024 * 1024))
                 os.replace(part, final)                 # atomic: file appears complete
                 print(f"recorded {final} ({final.stat().st_size} bytes)", flush=True)
+            if args.retain_minutes > 0:
+                cutoff = time.time() - args.retain_minutes * 60
+                for old in root.glob("*/*/*.mp4"):
+                    if old.stat().st_mtime < cutoff:
+                        old.unlink()
             time.sleep(args.interval)
     except KeyboardInterrupt:
         pass

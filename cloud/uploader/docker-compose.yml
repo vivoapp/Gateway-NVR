@@ -68,8 +68,6 @@ services:
         condition: service_completed_successfully
     environment:
       S3_ENDPOINT_URL: http://minio:9000
-      # true for the demo so you can watch local files disappear after a verified upload.
-      DELETE_AFTER_UPLOAD: ${DELETE_AFTER_UPLOAD:-true}
     volumes:
       - recordings:/data/recordings
       - state:/data/state
@@ -80,7 +78,8 @@ services:
     image: segment-uploader:local
     depends_on: [uploader]
     command: ["python", "tools/fake_recorder.py", "--dir", "/data/recordings",
-              "--cameras", "2", "--interval", "2", "--size-mb", "1"]
+              "--cameras", "2", "--interval", "2", "--size-mb", "1",
+              "--retain-minutes", "15"]   # the demo's stand-in for the recorder's own cleanup (M9)
     volumes:
       - recordings:/data/recordings
     restart: "no"

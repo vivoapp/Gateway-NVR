@@ -27,8 +27,14 @@ class Config:
     # seconds. This keeps the scan cheap when days of segments are on the disk.
     recent_days: int = 2
     full_scan_interval: float = 3600.0
-    # Local files are only ever deleted after the upload is verified.
-    delete_after_upload: bool = False
+    # The uploader never deletes local files. Removing old segments is the recorder's job (M9).
+    # Upload limit in megabits per second for all workers together. 0 = no limit.
+    upload_limit_mbps: float = 0.0
+    # How many cameras are uploaded at the same time. Segments of one camera always go in order.
+    workers: int = 2
+    # Where the index records (one per uploaded segment) are written. See index.py.
+    index_sink: str = "jsonl"
+    index_dir: Path | None = None            # default: an "index" folder next to the state file
     backoff_initial: float = 2.0
     backoff_max: float = 300.0
     batch_size: int = 50
@@ -41,8 +47,9 @@ class Config:
 
 
 SERVICE_KEYS = {"watch_dir", "state_db", "nominal_duration", "scan_interval", "recent_days",
-                "full_scan_interval", "delete_after_upload", "backoff_initial", "backoff_max",
-                "batch_size", "connect_timeout", "read_timeout"}
+                "full_scan_interval", "backoff_initial", "backoff_max", "batch_size",
+                "connect_timeout", "read_timeout", "upload_limit_mbps", "workers"}
+INDEX_KEYS = {"sink", "dir"}
 S3_KEYS = {"endpoint_url", "bucket", "region", "key_prefix", "access_key", "secret_key"}
 
 
@@ -51,10 +58,12 @@ def load_config(path: str | os.PathLike) -> Config:
         raw = tomllib.load(f)
     svc = raw.get("service", {})
     s3 = raw.get("s3", {})
+    idx = raw.get("index", {})
     # A misspelled or removed setting must not be silently ignored.
     unknown = ([f"service.{k}" for k in svc if k not in SERVICE_KEYS]
                + [f"s3.{k}" for k in s3 if k not in S3_KEYS]
-               + [k for k in raw if k not in ("service", "s3")])
+               + [f"index.{k}" for k in idx if k not in INDEX_KEYS]
+               + [k for k in raw if k not in ("service", "s3", "index")])
     if unknown:
         raise ValueError(f"unknown setting(s) in {path}: {', '.join(sorted(unknown))}")
     base = Path(path).resolve().parent
@@ -79,9 +88,14 @@ def load_config(path: str | os.PathLike) -> Config:
         cfg.endpoint_url = os.environ["S3_ENDPOINT_URL"]
     for name in ("nominal_duration", "scan_interval", "recent_days", "full_scan_interval",
                  "backoff_initial", "backoff_max", "connect_timeout", "read_timeout",
-                 "batch_size", "delete_after_upload"):
+                 "batch_size", "upload_limit_mbps", "workers"):
         if name in svc:
             setattr(cfg, name, svc[name])
-    if os.environ.get("DELETE_AFTER_UPLOAD"):
-        cfg.delete_after_upload = os.environ["DELETE_AFTER_UPLOAD"].strip().lower() in ("1", "true", "yes")
+    cfg.index_sink = idx.get("sink", cfg.index_sink)
+    if idx.get("dir"):
+        cfg.index_dir = p(idx["dir"])
+    if cfg.workers < 1:
+        raise ValueError("service.workers must be at least 1")
+    if cfg.upload_limit_mbps < 0:
+        raise ValueError("service.upload_limit_mbps must be 0 (no limit) or more")
     return cfg

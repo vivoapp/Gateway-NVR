@@ -71,7 +71,7 @@ def cfg(tmp_path, s3) -> Config:
     return Config(
         watch_dir=watch, state_db=tmp_path / "state.db", bucket=s3.bucket, endpoint_url=s3.url,
         access_key="test", secret_key="test", key_prefix="site-1",
-        delete_after_upload=True, backoff_initial=1.0, backoff_max=8.0,
+        backoff_initial=1.0, backoff_max=8.0,
         connect_timeout=2, read_timeout=5)
 
 

@@ -9,9 +9,15 @@ nominal_duration = 60             # segment end = start + this, until the file n
 recent_days = 2                   # normal scans look at the date folders of the last N days (UTC)
 full_scan_interval = 3600         # a scan of every folder at start-up and then this often (seconds)
 scan_interval = 2.0
-delete_after_upload = false       # true = delete the local file, but only after verified upload
+# The uploader never deletes local files. Removing old segments is the recorder's job (M9).
+workers = 2                       # cameras uploaded at the same time (one camera's segments go in order)
+upload_limit_mbps = 0             # upload speed limit for all workers together; 0 = no limit
 backoff_initial = 2.0             # retry delay doubles each time ...
 backoff_max = 300.0               # ... up to this many seconds
+
+[index]
+sink = "jsonl"                    # "jsonl" = one JSON line per uploaded segment, "none" = off
+dir = "index"                     # default: an "index" folder next to the state file
 
 [s3]
 endpoint_url = "http://localhost:9000"   # MinIO from docker-compose.yml; remove for AWS S3

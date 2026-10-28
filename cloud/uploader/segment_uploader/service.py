@@ -9,15 +9,15 @@ import random
 import re
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from botocore.exceptions import ClientError, ConnectionError as BotoConnectionError, HTTPClientError
-
 from . import store as st
 from .config import Config
+from .index import IndexSink, build_record, make_sink
 from .segment import parse_segment_name
-from .storage import IntegrityError, S3Storage, remote_matches
+from .storage import PAUSING_KINDS, IntegrityError, S3Storage, classify, remote_matches
 
 log = logging.getLogger("segment_uploader")
 
@@ -33,16 +33,6 @@ def hash_file(path: Path) -> tuple[int, str, str, str]:
             md5.update(chunk)
             size += len(chunk)
     return size, sha.hexdigest(), md5.hexdigest(), base64.b64encode(md5.digest()).decode()
-
-
-def is_outage(exc: BaseException) -> bool:
-    """Errors that mean 'the storage is unreachable or unhealthy', not 'this file is bad'."""
-    if isinstance(exc, (BotoConnectionError, HTTPClientError)):
-        return True
-    if isinstance(exc, ClientError):
-        status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode", 0)
-        return status >= 500 or exc.response.get("Error", {}).get("Code") in ("SlowDown", "RequestTimeout")
-    return False
 
 
 _DATE_DIR = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -102,17 +92,20 @@ def iter_recent_files(cfg: Config, today: datetime, dir_state: dict):
 
 class Service:
     def __init__(self, cfg: Config, storage=None, store: st.Store | None = None,
-                 clock=time.time, jitter=random.random):
+                 clock=time.time, jitter=random.random, sink: IndexSink | None = None):
         self.cfg = cfg
         self.storage = storage or S3Storage(cfg)
         self.store = store or st.Store(cfg.state_db)
+        self.sink = sink or make_sink(cfg)
+        self._lock = threading.Lock()   # guards the pause state below (workers share it)
+        self._index_pause_until = 0.0
         self.clock = clock
         self.jitter = jitter
         self._known: set[str] = set()   # keys already in the state file: skipped by normal scans
         self._dir_state: dict[str, int | None] = {}   # date folder -> modification time at last listing
         self._last_full_scan: float | None = None
         self._warned_names: set[str] = set()
-        self._pause_until = 0.0         # whole-service pause while storage is unreachable
+        self._pause_until = 0.0         # whole-service pause: storage unreachable, refusing us, or full
         self._outage_streak = 0
 
     # ---- start-up -------------------------------------------------------------------
@@ -195,18 +188,43 @@ class Service:
         return base * (0.5 + 0.5 * self.jitter())
 
     def upload_due(self, should_stop=lambda: False) -> dict[str, int]:
+        """Upload what is due. Cameras go in parallel (`workers`); one camera's segments go in order.
+
+        A file-level problem delays only that file. Storage-level problems (unreachable, wrong
+        credentials, no space) stop every worker and pause the whole service.
+        """
         stats = {"uploaded": 0, "retry": 0, "outage": 0}
-        now = self.clock()
-        if now < self._pause_until:
+        if self.clock() < self._pause_until:
             return stats
-        for row in self.store.due(now, self.cfg.batch_size):
-            if should_stop():
-                break
-            result = self._upload_one(row)
-            if result in stats:
-                stats[result] += 1
-            if result == "outage":
-                break                         # do not hammer an unreachable server file by file
+        rows = self.store.due(self.clock(), self.cfg.batch_size)
+        by_camera: dict[str, list] = {}
+        for row in rows:                      # rows are oldest first, so cameras start oldest first
+            by_camera.setdefault(row["camera_id"] or "", []).append(row)
+        halt = threading.Event()
+
+        def run_camera(items) -> dict[str, int]:
+            local = {"uploaded": 0, "retry": 0, "outage": 0}
+            for row in items:
+                if halt.is_set() or should_stop():
+                    break
+                result = self._upload_one(row)
+                if result in local:
+                    local[result] += 1
+                if result == "outage":
+                    halt.set()                # do not hammer a storage that is refusing us
+                    break
+            return local
+
+        groups = list(by_camera.values())
+        workers = min(self.cfg.workers, len(groups))
+        if workers <= 1:
+            results = [run_camera(rows)] if rows else []      # one line: strictly oldest first
+        else:
+            with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="upload") as pool:
+                results = list(pool.map(run_camera, groups))
+        for r in results:
+            for k, v in r.items():
+                stats[k] += v
         return stats
 
     def _upload_one(self, row) -> str:
@@ -256,34 +274,67 @@ class Service:
                 return "skipped"
 
             self.store.mark_uploaded(key, remote.etag, self.clock())
-            self._outage_streak = 0
+            with self._lock:
+                self._outage_streak = 0
             log.info("event=%s key=%s size=%d sha256=%s attempts=%d ms=%d", action, key, size, sha,
                      attempts, (time.monotonic() - t0) * 1000)
-            if self.cfg.delete_after_upload:
-                path.unlink()                 # only reached after verified upload
-                self.store.mark_local_deleted(key)
-                log.info("event=local_deleted key=%s", key)
-            return "uploaded"
+            return "uploaded"                 # the local file is never touched: the recorder owns it
         except Exception as exc:              # not BaseException: a crash must leave 'uploading'
             return self._schedule_retry(key, attempts, exc)
 
     def _schedule_retry(self, key: str, attempts: int, exc: Exception) -> str:
-        outage = is_outage(exc)
-        if outage:
-            self._outage_streak += 1
-            delay = self._backoff(self._outage_streak)
-            self._pause_until = self.clock() + delay
+        kind = classify(exc)
+        error = f"{type(exc).__name__}: {exc}"
+        if kind in PAUSING_KINDS:
+            with self._lock:
+                now = self.clock()
+                if now >= self._pause_until:          # first failure of this pause (workers share it)
+                    if kind == "outage":
+                        self._outage_streak += 1
+                        delay = self._backoff(self._outage_streak)
+                    else:                              # wrong credentials / no space: not a blip
+                        delay = self.cfg.backoff_max * (0.5 + 0.5 * self.jitter())
+                    self._pause_until = now + delay
+                    if kind == "auth":
+                        log.error("event=storage_refused_credentials service_paused_for=%.0fs error=%s",
+                                  delay, error)
+                    elif kind == "full":
+                        log.error("event=storage_full service_paused_for=%.0fs error=%s", delay, error)
+                delay = self._pause_until - now
         else:
             delay = self._backoff(attempts)
-        self.store.mark_retry(key, f"{type(exc).__name__}: {exc}", self.clock() + delay)
+        self.store.mark_retry(key, error, self.clock() + delay)
         log.warning("event=upload_failed key=%s attempts=%d kind=%s retry_in=%.1fs error=%s",
-                    key, attempts, "outage" if outage else "file", delay, f"{type(exc).__name__}: {exc}")
-        return "outage" if outage else "retry"
+                    key, attempts, kind, delay, error)
+        return "outage" if kind in PAUSING_KINDS else "retry"
+
+    # ---- index records ----------------------------------------------------------------
+    def deliver_index(self, limit: int = 200) -> int:
+        """Hand the index record of every confirmed upload to the sink. Returns how many were sent.
+
+        A failing sink never blocks uploading: the records stay in the state file and are sent
+        later (with a pause, so a broken sink is not retried every 2 seconds).
+        """
+        if self.clock() < self._index_pause_until:
+            return 0
+        sent = 0
+        for row in self.store.unsent_index(limit):
+            try:
+                self.sink.emit(build_record(row, self.cfg.bucket))
+            except Exception as exc:
+                self._index_pause_until = self.clock() + max(self.cfg.backoff_initial, 5.0)
+                log.warning("event=index_failed key=%s error=%s: %s", row["key"], type(exc).__name__, exc)
+                break
+            self.store.mark_index_sent(row["key"])
+            sent += 1
+        return sent
 
     # ---- main loop ------------------------------------------------------------------
     def run_once(self) -> dict[str, int]:
         self.scan_once()
-        return self.upload_due()
+        stats = self.upload_due()
+        self.deliver_index()
+        return stats
 
     def run_forever(self, stop: threading.Event) -> None:
         self.recover()
@@ -292,6 +343,7 @@ class Service:
             try:
                 self.scan_once()
                 self.upload_due(should_stop=stop.is_set)
+                self.deliver_index()
             except Exception:
                 log.exception("event=loop_error")
             stop.wait(self.cfg.scan_interval)

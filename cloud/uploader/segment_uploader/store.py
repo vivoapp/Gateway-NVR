@@ -27,13 +27,15 @@ CREATE TABLE IF NOT EXISTS segments (
     etag            TEXT,
     first_seen      REAL NOT NULL,
     uploaded_at     REAL,
-    local_deleted   INTEGER NOT NULL DEFAULT 0
+    local_deleted   INTEGER NOT NULL DEFAULT 0,   -- unused: kept so older state files still open
+    index_sent      INTEGER NOT NULL DEFAULT 0    -- 1 once the index record was handed to the sink
 );
 CREATE INDEX IF NOT EXISTS idx_segments_due ON segments (state, next_attempt_at);
 """
 
 # Columns added after the first version. A state file made by an older version gets them on start.
-_ADDED_COLUMNS = {"camera_id": "TEXT", "start_utc": "INTEGER", "end_utc": "INTEGER"}
+_ADDED_COLUMNS = {"camera_id": "TEXT", "start_utc": "INTEGER", "end_utc": "INTEGER",
+                  "index_sent": "INTEGER NOT NULL DEFAULT 0"}
 
 
 class Store:
@@ -142,8 +144,15 @@ class Store:
     def set_state(self, key: str, state: str, error: str | None = None) -> None:
         self._exec("UPDATE segments SET state=?, last_error=? WHERE key=?", (state, error, key))
 
-    def mark_local_deleted(self, key: str) -> None:
-        self._exec("UPDATE segments SET local_deleted=1 WHERE key=?", (key,))
+    def unsent_index(self, limit: int):
+        """Uploaded segments whose index record has not been handed over yet, oldest first."""
+        with self._lock:
+            return self._db.execute(
+                "SELECT * FROM segments WHERE state=? AND index_sent=0 ORDER BY start_utc, key LIMIT ?",
+                (UPLOADED, limit)).fetchall()
+
+    def mark_index_sent(self, key: str) -> None:
+        self._exec("UPDATE segments SET index_sent=1 WHERE key=?", (key,))
 
     def reset_interrupted(self) -> int:
         """After a crash or restart, anything left 'uploading' must be checked again."""

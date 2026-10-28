@@ -31,7 +31,7 @@ def real_cfg(tmp_path):
         access_key=os.environ.get("MINIO_USER", "minioadmin"),
         secret_key=os.environ.get("MINIO_PASSWORD", "minioadmin"),
         key_prefix=f"it-{uuid.uuid4().hex[:10]}",          # every test gets its own folder
-        delete_after_upload=True, backoff_initial=1.0, backoff_max=8.0)
+        backoff_initial=1.0, backoff_max=8.0)
     yield cfg
     client = S3Storage(cfg).client                            # clean up what the test stored
     for page in client.get_paginator("list_objects_v2").paginate(Bucket=cfg.bucket, Prefix=cfg.key_prefix):
@@ -77,7 +77,6 @@ def test_real_server_rejects_a_body_that_does_not_match_content_md5(real_cfg):
 
 
 def test_duplicate_and_conflict_against_real_server(real_cfg):
-    real_cfg.delete_after_upload = False
     original = os.urandom(20_000)
     path = write_segment(real_cfg, seg_rel("cam01", 1), original)
     svc = make_service(real_cfg, FakeClock())

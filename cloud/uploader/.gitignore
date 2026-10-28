@@ -7,3 +7,5 @@ config.toml
 *.db
 *.db-wal
 *.db-shm
+logs/
+index/

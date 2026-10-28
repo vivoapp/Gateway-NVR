@@ -1,6 +1,8 @@
-"""Normal operation: finished segments are uploaded, verified, and (optionally) removed locally."""
+"""Normal operation: finished segments are uploaded, verified, and left alone on disk."""
 import os
 from datetime import timedelta
+
+import pytest
 
 from conftest import BASE, seg_key, seg_rel, sha, step, write_segment
 
@@ -29,26 +31,25 @@ def test_a_finished_segment_is_picked_up_in_the_first_scan(cfg, s3, new_service)
     assert svc.store.counts() == {"pending": 1}
 
 
-def test_local_file_deleted_only_after_verified_upload(cfg, s3, new_service):
+def test_local_files_are_never_deleted(cfg, s3, new_service):
     path = write_segment(cfg, seg_rel("cam01", 1), os.urandom(1000))
     svc = new_service()
 
     svc.scan_once()
     assert path.exists() and svc.store.counts() == {"pending": 1}   # registered, not uploaded yet
 
-    svc.upload_due()
-    assert not path.exists()
-    assert svc.store.get(seg_key("cam01", 1))["local_deleted"] == 1
-
-
-def test_local_file_kept_when_delete_disabled(cfg, s3, new_service):
-    cfg.delete_after_upload = False
-    path = write_segment(cfg, seg_rel("cam01", 1), os.urandom(1000))
-    svc = new_service()
     step(svc, 3)
-    assert path.exists()
+    assert path.exists()                                            # the recorder (M9) owns cleanup
     assert svc.store.counts() == {"uploaded": 1}
     assert len(s3.objects()) == 1
+
+
+def test_the_old_delete_after_upload_setting_is_rejected(tmp_path):
+    from segment_uploader.config import load_config
+    f = tmp_path / "c.toml"
+    f.write_text('[service]\nwatch_dir = "x"\ndelete_after_upload = true\n[s3]\nbucket = "b"\n')
+    with pytest.raises(ValueError, match="delete_after_upload"):
+        load_config(f)
 
 
 def test_part_files_and_other_files_are_never_uploaded(cfg, s3, new_service):
@@ -120,7 +121,6 @@ def test_upload_order_follows_segment_start_time_not_file_time_or_listing_order(
             self.order.append(key)
             return super().put(key, *args, **kwargs)
 
-    cfg.delete_after_upload = False
     wanted = [seg_key("cam02", 1), seg_key("cam01", 2), seg_key("cam02", 3), seg_key("cam01", 4)]
     paths = {k: write_segment(cfg, k.split("/", 1)[1], os.urandom(2000)) for k in wanted}
     for i, key in enumerate(reversed(wanted)):         # file times in the opposite order

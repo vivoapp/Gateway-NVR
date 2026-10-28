@@ -102,16 +102,16 @@ do_demo() {
   (( offset < 0 )) && offset=0
 
   head1 "Step 1 of 5: normal operation"
-  say "   The recorder writes segments, the uploader sends them to MinIO and removes the local copy."
+  say "   The recorder writes segments and the uploader sends them to MinIO. Local files are never deleted by the uploader."
   sleep 8
   show
-  log_excerpt 'event=(uploaded|local_deleted)' 4
+  log_excerpt 'event=uploaded' 4
 
   head1 "Step 2 of 5: storage outage (MinIO is stopped)"
   "${DC[@]}" stop minio >/dev/null 2>&1
   sleep 12
   show
-  note "bucket_objects=unreachable is expected. local_files grows and nothing is deleted."
+  note "bucket_objects=unreachable is expected. local_files keeps growing and nothing is lost."
   log_excerpt 'event=upload_failed' 3
 
   head1 "Step 3 of 5: the uploader process is killed (SIGKILL)"
@@ -135,7 +135,7 @@ do_demo() {
   "${DC[@]}" stop recorder >/dev/null 2>&1
   drained() {
     local l; l="$(brief)"
-    [[ "$(get "$l" pending)" == 0 && "$(get "$l" uploading)" == 0 && "$(get "$l" local_files)" == 0 ]]
+    [[ "$(get "$l" pending)" == 0 && "$(get "$l" uploading)" == 0 ]]
   }
   wait_for 120 "the backlog to drain" drained
   line="$(brief)"
@@ -153,8 +153,8 @@ do_demo() {
   (( offset > 0 )) && say "   (of which $offset are older objects from earlier runs; not counted below)"
   say "   segments uploaded twice       : $dups"
   say "   conflicts / missing           : $conflict / $missing"
-  say "   local files left              : $local_files"
-  if [[ -n "$uploaded" && "$uploaded" == "$expected_bucket" && "$dups" == 0 && "$conflict" == 0 && "$missing" == 0 && "$local_files" == 0 ]]; then
+  say "   local files on disk           : $local_files  (the uploader never deletes them)"
+  if [[ -n "$uploaded" && "$uploaded" == "$expected_bucket" && "$dups" == 0 && "$conflict" == 0 && "$missing" == 0 ]]; then
     good "RESULT: PASS - every segment is in the bucket exactly once, nothing was lost."
   else
     bad "RESULT: CHECK THE NUMBERS ABOVE and ./run.sh logs"

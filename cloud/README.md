@@ -5,7 +5,7 @@ Installed on the gateway at `/opt/vivo-cloud`. One folder per module. Secrets ar
 
 | Folder | Module | Status |
 |---|---|---|
-| `uploader/` | M19 archive upload queue + M20 interrupted upload and recovery | In progress (step 2 of 9 done) |
+| `uploader/` | M19 archive upload queue + M20 interrupted upload and recovery | In progress (steps 1 to 5 of 9 done) |
 | `discovery/` | M4 ONVIF discovery | Not started |
 | `agent/` | M21 Edge Agent, gateway identity | Not started |
 | `hardening/` | M23 hardening | Not started |
@@ -21,5 +21,5 @@ No passwords, keys or tokens in Git. Pin every image by version and digest. Tell
 firewall change or internet cut.
 
 ## Known to fix before this is merged
-The uploader still contains the evaluation demo (`docker-compose.yml`, `run.sh`, `minioadmin` test login,
-local deletion after upload). These are for local testing only and are replaced in steps 3 and 6.
+The uploader still contains the evaluation demo Docker files (`docker-compose.yml`, `run.sh`, a `minioadmin` test login).
+These are for local testing only and are replaced in step 6. Local deletion is already gone (step 3).

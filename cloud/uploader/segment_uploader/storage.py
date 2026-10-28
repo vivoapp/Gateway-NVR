@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import re
+import threading
+import time
 from typing import NamedTuple
 
 import boto3
 from botocore.config import Config as BotoConfig
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, ConnectionError as BotoConnectionError, HTTPClientError
 
 from .config import Config
 
@@ -15,6 +17,84 @@ _MD5_HEX = re.compile(r"^[0-9a-f]{32}$")
 
 class IntegrityError(Exception):
     """The stored object does not match the local file."""
+
+
+# ---- what kind of failure is this? --------------------------------------------------------
+# "outage"  the storage cannot be reached or is unhealthy   -> pause the whole service, back off
+# "auth"    wrong or expired credentials, missing bucket    -> pause the whole service, say so loudly
+# "full"    the account or bucket has no room / quota hit   -> pause the whole service, say so loudly
+# "file"    something is wrong with this one file           -> only this file waits, others go on
+PAUSING_KINDS = ("outage", "auth", "full")
+_AUTH_CODES = {"InvalidAccessKeyId", "SignatureDoesNotMatch", "AccessDenied", "ExpiredToken",
+               "InvalidToken", "NoSuchBucket", "InvalidBucketName", "AllAccessDisabled",
+               "bad_auth_token", "expired_auth_token", "unauthorized"}
+_FULL_MARKERS = ("storagefull", "quota", "cap_exceeded", "capexceeded", "insufficientstorage",
+                 "storagelimit")
+
+
+def classify(exc: BaseException) -> str:
+    if isinstance(exc, (BotoConnectionError, HTTPClientError)):
+        return "outage"
+    if isinstance(exc, ClientError):
+        code = str(exc.response.get("Error", {}).get("Code", ""))
+        status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode", 0)
+        if status == 507 or any(m in code.lower() for m in _FULL_MARKERS):
+            return "full"            # checked before auth: some stores answer "full" with a 403
+        if code in _AUTH_CODES or status in (401, 403):
+            return "auth"
+        if status >= 500 or code in ("SlowDown", "RequestTimeout", "ServiceUnavailable"):
+            return "outage"
+    return "file"
+
+
+class RateLimiter:
+    """Shared upload speed limit for all workers (megabits per second; 0 = unlimited)."""
+
+    def __init__(self, mbps: float, clock=time.monotonic, sleep=time.sleep):
+        self.bytes_per_s = mbps * 1_000_000 / 8
+        self._clock, self._sleep = clock, sleep
+        self._lock = threading.Lock()
+        self._next = 0.0                     # time at which the "wire" is free again
+
+    def wait(self, nbytes: int) -> None:
+        if self.bytes_per_s <= 0 or nbytes <= 0:
+            return
+        with self._lock:
+            now = self._clock()
+            start = max(now, self._next)
+            self._next = start + nbytes / self.bytes_per_s
+            delay = start - now
+        if delay > 0:
+            self._sleep(delay)
+
+
+class ThrottledFile:
+    """A file object whose reads are slowed to the shared limit (used as the upload body)."""
+
+    def __init__(self, f, limiter: RateLimiter, chunk: int = 64 * 1024):
+        self._f, self._limiter, self._chunk = f, limiter, chunk
+
+    def read(self, size: int = -1) -> bytes:
+        out = bytearray()
+        want = size
+        while want != 0:
+            data = self._f.read(self._chunk if want < 0 else min(self._chunk, want))
+            if not data:
+                break
+            self._limiter.wait(len(data))
+            out += data
+            if want > 0:
+                want -= len(data)
+        return bytes(out)
+
+    def seek(self, pos, whence=0):
+        return self._f.seek(pos, whence)
+
+    def tell(self):
+        return self._f.tell()
+
+    def __getattr__(self, name):
+        return getattr(self._f, name)
 
 
 class RemoteObject(NamedTuple):
@@ -38,8 +118,10 @@ def remote_matches(remote: RemoteObject, size: int, md5_hex: str, sha256: str) -
 
 
 class S3Storage:
-    def __init__(self, cfg: Config):
+    def __init__(self, cfg: Config, limiter: RateLimiter | None = None):
         self.bucket = cfg.bucket
+        self.prefix = cfg.key_prefix.strip("/")
+        self.limiter = limiter or RateLimiter(cfg.upload_limit_mbps)
         self.client = boto3.client(
             "s3",
             endpoint_url=cfg.endpoint_url,
@@ -72,10 +154,19 @@ class S3Storage:
     def put(self, key: str, path, md5_b64: str, sha256: str, size: int) -> None:
         """Upload one file. The server checks Content-MD5 and rejects a damaged body."""
         with open(path, "rb") as f:
-            self.client.put_object(Bucket=self.bucket, Key=key, Body=f, ContentLength=size,
+            body = f
+            if self.limiter.bytes_per_s > 0:
+                body = ThrottledFile(f, self.limiter)
+            self.client.put_object(Bucket=self.bucket, Key=key, Body=body, ContentLength=size,
                                    ContentMD5=md5_b64, Metadata={"sha256": sha256})
 
     def delete(self, key: str) -> None:
+        """Remove an object this service has just written (a copy that failed the read-back check).
+
+        It refuses any key outside our own prefix, so a bug can never delete someone else's data.
+        """
+        if self.prefix and not key.startswith(self.prefix + "/"):
+            raise ValueError(f"refusing to delete {key!r}: outside the prefix {self.prefix!r}")
         self.client.delete_object(Bucket=self.bucket, Key=key)
 
     def count(self, prefix: str = "") -> int:

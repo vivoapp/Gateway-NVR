@@ -10,7 +10,6 @@ KEY = seg_key("cam01", 1)
 
 
 def test_same_segment_uploaded_once_across_rescans_and_restarts(cfg, s3, new_service):
-    cfg.delete_after_upload = False                # file stays, so every scan sees it again
     data = os.urandom(10_000)
     write_segment(cfg, seg_rel("cam01", 1), data)
 
@@ -39,11 +38,10 @@ def test_existing_identical_object_is_adopted_not_uploaded_again(cfg, s3, new_se
 
     assert storage.puts == 0
     assert svc.store.get(KEY)["state"] == "uploaded"
-    assert not path.exists()                       # identical copy is confirmed remotely
+    assert path.exists()                           # the local file is never touched
 
 
 def test_touching_a_file_does_not_cause_a_second_upload(cfg, s3, new_service):
-    cfg.delete_after_upload = False
     path = write_segment(cfg, seg_rel("cam01", 1), os.urandom(10_000))
     storage = CountingStorage(cfg)
     svc = new_service(storage)
@@ -59,7 +57,6 @@ def test_touching_a_file_does_not_cause_a_second_upload(cfg, s3, new_service):
 
 
 def test_different_content_under_same_key_is_flagged_and_never_overwrites(cfg, s3, new_service):
-    cfg.delete_after_upload = False
     original = os.urandom(10_000)
     path = write_segment(cfg, seg_rel("cam01", 1), original)
     storage = CountingStorage(cfg)

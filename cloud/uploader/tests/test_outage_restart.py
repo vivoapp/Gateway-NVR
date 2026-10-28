@@ -17,7 +17,7 @@ def test_outage_keeps_files_and_retries_with_growing_backoff(cfg, s3, new_servic
     svc = new_service()
     first = write_segment(cfg, seg_rel("cam01", 1), os.urandom(5000))
     step(svc)
-    assert not first.exists()                      # uploaded and removed while the server was up
+    assert svc.store.counts() == {"uploaded": 1} and first.exists()   # uploaded, file kept
 
     s3.stop()                                      # --- network outage ---
     data = {n: os.urandom(5000) for n in (2, 3)}
@@ -25,7 +25,7 @@ def test_outage_keeps_files_and_retries_with_growing_backoff(cfg, s3, new_servic
     step(svc)
 
     assert svc.store.counts() == {"uploaded": 1, "pending": 2}
-    assert all(p.exists() for p in paths.values())           # nothing deleted without confirmation
+    assert all(p.exists() for p in paths.values())           # files stay while the server is down
     row = svc.store.get(seg_key("cam01", 2))
     assert row["attempts"] == 1
     assert "Could not connect" in row["last_error"]          # a real connection failure
@@ -50,7 +50,7 @@ def test_outage_keeps_files_and_retries_with_growing_backoff(cfg, s3, new_servic
     assert svc.store.counts() == {"uploaded": 3}
     objects = s3.objects()
     assert objects[seg_key("cam01", 2)] == data[2] and objects[seg_key("cam01", 3)] == data[3]
-    assert not any(p.exists() for p in paths.values())       # removed only after verified upload
+    assert all(p.exists() for p in paths.values())           # and they are still there afterwards
 
 
 def test_restart_during_outage_resumes_pending_files(cfg, s3, new_service, clock):
@@ -69,7 +69,7 @@ def test_restart_during_outage_resumes_pending_files(cfg, s3, new_service, clock
     step(svc2)
 
     assert s3.objects() == {seg_key("cam01", 1): data}
-    assert svc2.store.counts() == {"uploaded": 1} and not path.exists()
+    assert svc2.store.counts() == {"uploaded": 1} and path.exists()
 
 
 def test_crash_after_upload_before_state_saved_does_not_upload_twice(cfg, s3, new_service):
@@ -93,7 +93,7 @@ def test_crash_after_upload_before_state_saved_does_not_upload_twice(cfg, s3, ne
 
     assert storage2.puts == 0                      # found the verified object, did not re-upload
     assert svc2.store.get(seg_key("cam01", 1))["state"] == "uploaded"
-    assert not path.exists()
+    assert path.exists()
 
 
 def test_run_forever_end_to_end_with_outage(cfg, s3):

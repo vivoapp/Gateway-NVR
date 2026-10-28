@@ -36,7 +36,7 @@ def test_damaged_upload_is_rejected_then_succeeds_when_fixed(cfg, s3, new_servic
     step(svc)
 
     assert s3.objects() == {KEY: data}
-    assert svc.store.get(KEY)["state"] == "uploaded" and not path.exists()
+    assert svc.store.get(KEY)["state"] == "uploaded" and path.exists()
 
 
 def test_mismatch_found_after_upload_removes_object_and_keeps_local_file(cfg, s3, new_service, clock):

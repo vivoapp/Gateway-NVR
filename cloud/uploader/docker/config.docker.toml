@@ -1,13 +1,18 @@
 # Settings used inside the containers (see docker-compose.yml).
-# DELETE_AFTER_UPLOAD and S3_ENDPOINT_URL can be overridden with environment variables.
+# S3_ENDPOINT_URL, S3_ACCESS_KEY and S3_SECRET_KEY can be overridden with environment variables.
 
 [service]
 watch_dir = "/data/recordings"
 state_db = "/data/state/state.db"
 scan_interval = 2.0
-delete_after_upload = false
+workers = 2                    # cameras uploaded at the same time
+upload_limit_mbps = 0          # 0 = no limit
 backoff_initial = 1.0          # short delays so the demo shows retries quickly
 backoff_max = 10.0
+
+[index]
+sink = "jsonl"                 # one JSON line per uploaded segment
+dir = "/data/state/index"
 
 [s3]
 endpoint_url = "http://minio:9000"
