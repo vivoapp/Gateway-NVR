@@ -1,0 +1,11 @@
+.venv/
+.git/
+__pycache__/
+.pytest_cache/
+recordings/
+state/
+logs/
+*.db
+*.db-wal
+*.db-shm
+config.toml

@@ -1,0 +1,87 @@
+"""Configuration loading (TOML)."""
+from __future__ import annotations
+
+import os
+import tomllib
+from dataclasses import dataclass
+from pathlib import Path
+
+
+@dataclass
+class Config:
+    watch_dir: Path
+    state_db: Path
+    bucket: str
+    endpoint_url: str | None = None
+    region: str = "us-east-1"
+    key_prefix: str = ""
+    access_key: str | None = None
+    secret_key: str | None = None
+    # A file ending in .mp4 is finished: the recorder renames <name>.mp4.part to <name>.mp4
+    # only when the segment is complete. Nothing else is ever uploaded.
+    # Length used for a segment's end time while the file name does not carry one.
+    nominal_duration: float = 60.0
+    scan_interval: float = 2.0
+    # Normal scans look only at date folders from the last `recent_days` days (UTC today and
+    # back). A full scan of every folder runs at start-up and then every `full_scan_interval`
+    # seconds. This keeps the scan cheap when days of segments are on the disk.
+    recent_days: int = 2
+    full_scan_interval: float = 3600.0
+    # Local files are only ever deleted after the upload is verified.
+    delete_after_upload: bool = False
+    backoff_initial: float = 2.0
+    backoff_max: float = 300.0
+    batch_size: int = 50
+    connect_timeout: float = 5.0
+    read_timeout: float = 60.0
+
+    def object_key(self, rel_path: str) -> str:
+        prefix = self.key_prefix.strip("/")
+        return f"{prefix}/{rel_path}" if prefix else rel_path
+
+
+SERVICE_KEYS = {"watch_dir", "state_db", "nominal_duration", "scan_interval", "recent_days",
+                "full_scan_interval", "delete_after_upload", "backoff_initial", "backoff_max",
+                "batch_size", "connect_timeout", "read_timeout"}
+S3_KEYS = {"endpoint_url", "bucket", "region", "key_prefix", "access_key", "secret_key"}
+
+
+def load_config(path: str | os.PathLike) -> Config:
+    with open(path, "rb") as f:
+        raw = tomllib.load(f)
+    svc = raw.get("service", {})
+    s3 = raw.get("s3", {})
+    # A misspelled or removed setting must not be silently ignored.
+    unknown = ([f"service.{k}" for k in svc if k not in SERVICE_KEYS]
+               + [f"s3.{k}" for k in s3 if k not in S3_KEYS]
+               + [k for k in raw if k not in ("service", "s3")])
+    if unknown:
+        raise ValueError(f"unknown setting(s) in {path}: {', '.join(sorted(unknown))}")
+    base = Path(path).resolve().parent
+
+    def p(value: str) -> Path:
+        q = Path(value)
+        return q if q.is_absolute() else base / q
+
+    cfg = Config(
+        watch_dir=p(svc["watch_dir"]),
+        state_db=p(svc.get("state_db", "state.db")),
+        bucket=s3["bucket"],
+        endpoint_url=s3.get("endpoint_url"),
+        region=s3.get("region", "us-east-1"),
+        key_prefix=s3.get("key_prefix", ""),
+        # Credentials: environment wins over the file, so secrets need not be committed.
+        access_key=os.environ.get("S3_ACCESS_KEY") or s3.get("access_key"),
+        secret_key=os.environ.get("S3_SECRET_KEY") or s3.get("secret_key"),
+    )
+    # Environment overrides, handy in containers: they win over the file.
+    if os.environ.get("S3_ENDPOINT_URL"):
+        cfg.endpoint_url = os.environ["S3_ENDPOINT_URL"]
+    for name in ("nominal_duration", "scan_interval", "recent_days", "full_scan_interval",
+                 "backoff_initial", "backoff_max", "connect_timeout", "read_timeout",
+                 "batch_size", "delete_after_upload"):
+        if name in svc:
+            setattr(cfg, name, svc[name])
+    if os.environ.get("DELETE_AFTER_UPLOAD"):
+        cfg.delete_after_upload = os.environ["DELETE_AFTER_UPLOAD"].strip().lower() in ("1", "true", "yes")
+    return cfg

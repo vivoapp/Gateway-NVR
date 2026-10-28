@@ -1,0 +1,18 @@
+# Settings used inside the containers (see docker-compose.yml).
+# DELETE_AFTER_UPLOAD and S3_ENDPOINT_URL can be overridden with environment variables.
+
+[service]
+watch_dir = "/data/recordings"
+state_db = "/data/state/state.db"
+scan_interval = 2.0
+delete_after_upload = false
+backoff_initial = 1.0          # short delays so the demo shows retries quickly
+backoff_max = 10.0
+
+[s3]
+endpoint_url = "http://minio:9000"
+bucket = "vivo-segments"
+key_prefix = "site-001"
+# Local MinIO defaults, for the demo only. Never commit real credentials.
+access_key = "minioadmin"
+secret_key = "minioadmin"

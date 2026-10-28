@@ -1,0 +1,24 @@
+# Copy to config.toml and adjust. Relative paths are relative to this file.
+
+[service]
+watch_dir = "recordings"          # the recorder writes finished segments here
+state_db = "state/state.db"       # SQLite file with the status of every segment
+# Only finished segments are uploaded: <watch_dir>/<camera_id>/<YYYY-MM-DD>/<camera_id>_<YYYYMMDDTHHMMSS>Z.mp4
+# The recorder writes <name>.mp4.part and renames it to <name>.mp4 when the segment is complete.
+nominal_duration = 60             # segment end = start + this, until the file name carries the end time
+recent_days = 2                   # normal scans look at the date folders of the last N days (UTC)
+full_scan_interval = 3600         # a scan of every folder at start-up and then this often (seconds)
+scan_interval = 2.0
+delete_after_upload = false       # true = delete the local file, but only after verified upload
+backoff_initial = 2.0             # retry delay doubles each time ...
+backoff_max = 300.0               # ... up to this many seconds
+
+[s3]
+endpoint_url = "http://localhost:9000"   # MinIO from docker-compose.yml; remove for AWS S3
+bucket = "vivo-segments"
+region = "us-east-1"
+key_prefix = "site-001"
+# Credentials: prefer the S3_ACCESS_KEY and S3_SECRET_KEY environment variables.
+# These are the local MinIO defaults from docker-compose.yml, for the demo only.
+access_key = "minioadmin"
+secret_key = "minioadmin"

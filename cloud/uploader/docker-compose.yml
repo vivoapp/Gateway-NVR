@@ -1,0 +1,117 @@
+# Local demo: MinIO (S3-compatible storage) + the uploader + a fake recorder.
+#
+#   ./run.sh start      build and start everything
+#   ./run.sh demo       scripted outage / crash / recovery run (good for a screen recording)
+#   ./run.sh test       automated tests, including a run against this MinIO
+#
+# MinIO web console: http://localhost:9001   user: minioadmin   password: minioadmin
+name: segment-uploader
+
+services:
+  minio:
+    image: ${MINIO_IMAGE:-cgr.dev/chainguard/minio:latest}
+    user: "0:0"          # the volume must be writable by MinIO
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - minio-data:/data
+    restart: "no"
+
+  # Creates the bucket once MinIO answers, then exits. Uses the app image (boto3), because the
+  # official minio/mc image is no longer available on Docker Hub.
+  create-bucket:
+    build:
+      context: .
+      target: runtime
+    image: segment-uploader:local
+    depends_on: [minio]
+    restart: "no"
+    command:
+      - python
+      - -c
+      - |
+        import time, boto3
+        from botocore.config import Config
+        c = boto3.client("s3", endpoint_url="http://minio:9000", region_name="us-east-1",
+                         aws_access_key_id="minioadmin", aws_secret_access_key="minioadmin",
+                         config=Config(s3={"addressing_style": "path"}, retries={"max_attempts": 1},
+                                       connect_timeout=3, read_timeout=10))
+        for _ in range(90):
+            try:
+                try:
+                    c.head_bucket(Bucket="vivo-segments")
+                except Exception as e:
+                    if getattr(e, "response", {}).get("Error", {}).get("Code") not in ("404", "NoSuchBucket", "NotFound"):
+                        raise
+                    c.create_bucket(Bucket="vivo-segments")
+                print("bucket vivo-segments ready")
+                break
+            except Exception as e:
+                print("waiting for MinIO...", type(e).__name__)
+                time.sleep(1)
+        else:
+            raise SystemExit("MinIO did not become ready")
+
+  # The service under evaluation. This is the only service with a build section.
+  uploader:
+    build:
+      context: .
+      target: runtime
+    image: segment-uploader:local
+    depends_on:
+      create-bucket:
+        condition: service_completed_successfully
+    environment:
+      S3_ENDPOINT_URL: http://minio:9000
+      # true for the demo so you can watch local files disappear after a verified upload.
+      DELETE_AFTER_UPLOAD: ${DELETE_AFTER_UPLOAD:-true}
+    volumes:
+      - recordings:/data/recordings
+      - state:/data/state
+    restart: "no"          # the demo kills it on purpose and starts it again by hand
+
+  # Pretends to be two cameras writing 1 MB segments every 2 seconds.
+  recorder:
+    image: segment-uploader:local
+    depends_on: [uploader]
+    command: ["python", "tools/fake_recorder.py", "--dir", "/data/recordings",
+              "--cameras", "2", "--interval", "2", "--size-mb", "1"]
+    volumes:
+      - recordings:/data/recordings
+    restart: "no"
+
+  # One-off status check: `docker compose run --rm cli`
+  cli:
+    image: segment-uploader:local
+    profiles: [tools]
+    entrypoint: ["python", "-m", "segment_uploader"]
+    command: ["status", "--brief"]
+    volumes:
+      - recordings:/data/recordings
+      - state:/data/state
+    restart: "no"
+
+  # Automated tests. They also run against the real MinIO above.
+  tests:
+    build:
+      context: .
+      target: test
+    image: segment-uploader-tests:local
+    profiles: [test]
+    depends_on:
+      create-bucket:
+        condition: service_completed_successfully
+    environment:
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_BUCKET: vivo-segments
+    restart: "no"
+
+volumes:
+  recordings: {}   # shared by the recorder and the uploader
+  state: {}        # the uploader's SQLite file; survives container restarts
+  minio-data: {}   # what MinIO has stored
