@@ -51,6 +51,32 @@ def test_upload_limit_is_applied_once_to_the_bytes_sent(cfg, s3):
     assert 1.5 <= took <= 3.2, took
 
 
+def test_extra_signing_pass_over_the_body_does_not_slow_the_upload_twice(cfg, s3):
+    """Some botocore versions read the body once more to sign it over plain http (seen in Docker)."""
+    from segment_uploader.service import Service
+    from segment_uploader.storage import S3Storage
+    from conftest import FakeClock
+
+    def signing_pass(request, **_):
+        request.body.read()
+        request.body.seek(0)
+
+    cfg.upload_limit_mbps = 6
+    write_segment(cfg, seg_rel("cam01", 1), os.urandom(1_500_000))
+    storage = S3Storage(cfg)
+    storage.client.meta.events.register("before-sign.s3.PutObject", signing_pass)
+    svc = Service(cfg, storage=storage, clock=FakeClock(), jitter=lambda: 1.0)
+    try:
+        svc.scan_once()
+        t0 = time.monotonic()
+        svc.upload_due()
+        took = time.monotonic() - t0
+        assert svc.store.counts() == {"uploaded": 1}
+    finally:
+        svc.store.close()
+    assert 1.5 <= took <= 3.2, took
+
+
 def test_no_limit_is_fast(cfg, s3):
     took, counts = timed_upload(cfg, 1_500_000)
     assert counts == {"uploaded": 1} and took < 1.5

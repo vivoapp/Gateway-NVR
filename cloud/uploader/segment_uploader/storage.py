@@ -140,6 +140,18 @@ class S3Storage:
                 response_checksum_validation="when_required",
             ),
         )
+        self.client.meta.events.register("before-send.s3.PutObject", self._throttle_body)
+
+    def _throttle_body(self, request, **_):
+        """Slow down the bytes that really go on the wire.
+
+        This runs just before the request is sent, after botocore has finished signing. Over plain
+        http (a local MinIO) some botocore versions read the whole body once more to sign it;
+        wrapping the file earlier would slow that extra pass down too and halve the speed.
+        """
+        body = request.body
+        if self.limiter.bytes_per_s > 0 and hasattr(body, "read"):
+            request.body = ThrottledFile(body, self.limiter)
 
     def head(self, key: str) -> RemoteObject | None:
         try:
@@ -154,10 +166,7 @@ class S3Storage:
     def put(self, key: str, path, md5_b64: str, sha256: str, size: int) -> None:
         """Upload one file. The server checks Content-MD5 and rejects a damaged body."""
         with open(path, "rb") as f:
-            body = f
-            if self.limiter.bytes_per_s > 0:
-                body = ThrottledFile(f, self.limiter)
-            self.client.put_object(Bucket=self.bucket, Key=key, Body=body, ContentLength=size,
+            self.client.put_object(Bucket=self.bucket, Key=key, Body=f, ContentLength=size,
                                    ContentMD5=md5_b64, Metadata={"sha256": sha256})
 
     def delete(self, key: str) -> None:

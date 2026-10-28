@@ -57,7 +57,7 @@ def test_upload_round_trip_with_matching_etag(real_cfg):
     head = S3Storage(real_cfg).head(f"{prefix}/{seg_rel('cam01', 2)}")
     assert head.etag == hashlib.md5(big).hexdigest()
     assert svc.store.counts() == {"uploaded": 2}
-    assert not any(real_cfg.watch_dir.rglob("*.mp4"))         # removed only after verification
+    assert len(list(real_cfg.watch_dir.rglob("*.mp4"))) == 2   # the uploader never deletes local files
     svc.store.close()
 
 
