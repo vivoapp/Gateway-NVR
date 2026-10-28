@@ -1,4 +1,5 @@
-# Local demo: MinIO (S3-compatible storage) + the uploader + a fake recorder.
+# LOCAL DEMO ONLY (contains a throw-away MinIO login). The gateway setup is in deploy/compose.yaml.
+# MinIO (S3-compatible storage) + the uploader + a fake recorder.
 #
 #   ./run.sh start      build and start everything
 #   ./run.sh demo       scripted outage / crash / recovery run (good for a screen recording)

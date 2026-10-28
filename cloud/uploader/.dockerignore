@@ -9,3 +9,4 @@ logs/
 *.db-wal
 *.db-shm
 config.toml
+deploy/.test/

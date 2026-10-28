@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One command for the whole demo.
+# One command for the whole LOCAL demo. The gateway setup is in deploy/ (see deploy/README.md).
 #
 #   ./run.sh start    build and start MinIO, the uploader and a fake recorder
 #   ./run.sh demo     scripted outage / crash / recovery run (good for a screen recording)

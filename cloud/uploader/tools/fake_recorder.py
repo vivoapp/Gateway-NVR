@@ -22,6 +22,8 @@ def main() -> None:
     ap.add_argument("--dir", default="recordings")
     ap.add_argument("--cameras", type=int, default=2)
     ap.add_argument("--interval", type=float, default=3.0, help="seconds between segments")
+    ap.add_argument("--name-format", default="cam{:02d}",
+                    help='camera id pattern, e.g. "VIVO-CAM-{:02d}" for the real names')
     ap.add_argument("--size-mb", type=float, default=2.0)
     ap.add_argument("--count", type=int, default=0, help="segments per camera (0 = run forever)")
     ap.add_argument("--retain-minutes", type=float, default=0,
@@ -35,7 +37,7 @@ def main() -> None:
             n += 1
             now = datetime.now(timezone.utc)
             for cam in range(1, args.cameras + 1):
-                camera_id = f"cam{cam:02d}"
+                camera_id = args.name_format.format(cam)
                 cam_dir = root / camera_id / now.strftime("%Y-%m-%d")
                 cam_dir.mkdir(parents=True, exist_ok=True)
                 final = cam_dir / f"{camera_id}_{now.strftime('%Y%m%dT%H%M%S')}Z.mp4"

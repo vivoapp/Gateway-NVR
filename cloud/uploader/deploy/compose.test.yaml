@@ -1,0 +1,69 @@
+# Local test on a PC: adds MinIO as fake storage and a 10-camera simulator, and replaces the two
+# gateway folders with Docker volumes. Everything else (user 10001, read-only mount, read-only
+# container, no extra rights, limits) is exactly the gateway setup. Use it through ./test.sh.
+services:
+  minio:
+    image: ${MINIO_IMAGE:-cgr.dev/chainguard/minio:latest}     # test only, not a gateway image
+    user: "0:0"
+    command: server /data
+    env_file: ${TEST_DIR:-.test}/minio.env
+    volumes: [minio-data:/data]
+    restart: "no"
+
+  create-bucket:
+    image: vivo-cloud-uploader:0.1.0
+    depends_on: [minio]
+    env_file: ${TEST_DIR:-.test}/cloud.env
+    restart: "no"
+    command:
+      - python
+      - -c
+      - |
+        import os, time, boto3
+        from botocore.config import Config
+        c = boto3.client("s3", endpoint_url=os.environ["S3_ENDPOINT_URL"], region_name="us-east-1",
+                         aws_access_key_id=os.environ["S3_ACCESS_KEY"],
+                         aws_secret_access_key=os.environ["S3_SECRET_KEY"],
+                         config=Config(s3={"addressing_style": "path"}, retries={"max_attempts": 1},
+                                       connect_timeout=3, read_timeout=10))
+        bucket = os.environ["S3_BUCKET"]
+        for _ in range(90):
+            try:
+                try:
+                    c.head_bucket(Bucket=bucket)
+                except Exception as e:
+                    if getattr(e, "response", {}).get("Error", {}).get("Code") not in ("404", "NoSuchBucket", "NotFound"):
+                        raise
+                    c.create_bucket(Bucket=bucket)
+                print("bucket", bucket, "ready")
+                break
+            except Exception as e:
+                print("waiting for MinIO...", type(e).__name__)
+                time.sleep(1)
+        else:
+            raise SystemExit("MinIO did not become ready")
+
+  uploader:
+    depends_on:
+      create-bucket:
+        condition: service_completed_successfully
+    volumes:                               # same mount points as the gateway, so these replace them
+      - sim-recordings:/data/recordings:ro
+      - sim-state:/data/state
+
+  # 10 cameras with the real names, one 1 MB segment per camera per minute.
+  simulator:
+    image: vivo-cloud-uploader:0.1.0
+    user: "10001:10001"
+    cap_drop: [ALL]
+    command: ["python", "tools/fake_recorder.py", "--dir", "/data/recordings", "--cameras", "10",
+              "--name-format", "VIVO-CAM-{:02d}", "--interval", "${SIM_INTERVAL:-60}", "--size-mb", "1",
+              "--retain-minutes", "120"]
+    volumes:
+      - sim-recordings:/data/recordings
+    restart: "no"
+
+volumes:
+  minio-data: {}
+  sim-recordings: {}
+  sim-state: {}

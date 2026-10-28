@@ -57,3 +57,19 @@ def test_unknown_setting_in_the_file_is_an_error(cfg, tmp_path):
     config_file = write_config(tmp_path, cfg, extra="settle_seconds = 2.0\n")     # removed setting
     with pytest.raises(ValueError, match="service.settle_seconds"):
         load_config(config_file)
+
+
+def test_site_settings_can_come_from_the_environment_only(tmp_path, monkeypatch):
+    """On the gateway one config file serves every site; bucket, region and prefix are in cloud.env."""
+    f = tmp_path / "c.toml"
+    f.write_text('[service]\nwatch_dir = "/data/recordings"\n')
+    for k in ("S3_BUCKET", "S3_REGION", "S3_KEY_PREFIX"):
+        monkeypatch.delenv(k, raising=False)
+    import pytest
+    with pytest.raises(ValueError, match="no bucket"):
+        load_config(f)
+    monkeypatch.setenv("S3_BUCKET", "vivo-prod")
+    monkeypatch.setenv("S3_REGION", "eu-central-003")
+    monkeypatch.setenv("S3_KEY_PREFIX", "site-042")
+    cfg = load_config(f)
+    assert (cfg.bucket, cfg.region, cfg.key_prefix) == ("vivo-prod", "eu-central-003", "site-042")

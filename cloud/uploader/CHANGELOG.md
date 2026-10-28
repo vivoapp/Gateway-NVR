@@ -2,6 +2,18 @@
 
 ## Unreleased (M19 and M20 work, built on the technical evaluation uploader)
 
+### Step 6: gateway Docker and Compose (`deploy/`)
+- `deploy/compose.yaml`: user 10001, `/srv/vivo/recordings/substream` read-only, read-only container, all
+  Linux rights dropped, 1 CPU / 512 MB / 200 processes, logs 20 MB x 5, secrets from `/etc/vivo/cloud.env`,
+  one-time `init-data` job that gives the state folder to the container user.
+- `deploy/config.gateway.toml`; site settings now also come from the environment (`S3_BUCKET`,
+  `S3_REGION`, `S3_KEY_PREFIX`, as well as the endpoint and keys), so every gateway uses the same file.
+- `deploy/compose.test.yaml` + `deploy/test.sh`: the same setup on a PC with MinIO and 10 simulated cameras
+  (`VIVO-CAM-01` to `10`), generated test passwords (none in Git), and `./test.sh check` which proves the
+  hardening settings and compares the counts.
+- Base image pinned by digest, Python packages pinned, container user is now 10001 everywhere.
+- The evaluation demo files are marked local-only.
+
 ### Steps 3 to 5: no local deletion, error types, speed limit, workers, index record
 - The uploader never deletes local files. `delete_after_upload` and `DELETE_AFTER_UPLOAD` are gone
   (the old setting in a config file is an error). The state column `local_deleted` stays, unused,

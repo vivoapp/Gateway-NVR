@@ -1,1 +1,8 @@
-boto3>=1.36,<2
+# Pinned to the versions the tests were run with. Change them only together with a test run.
+boto3==1.43.120
+botocore==1.43.120
+s3transfer==0.19.3
+jmespath==1.1.0
+python-dateutil==2.9.0.post0
+six==1.17.0
+urllib3==2.8.0

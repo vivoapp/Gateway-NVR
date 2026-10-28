@@ -75,10 +75,13 @@ def load_config(path: str | os.PathLike) -> Config:
     cfg = Config(
         watch_dir=p(svc["watch_dir"]),
         state_db=p(svc.get("state_db", "state.db")),
-        bucket=s3["bucket"],
+        # Site settings: environment wins over the file, so one image and one config file work on
+        # every gateway and only /etc/vivo/cloud.env differs.
+        bucket=os.environ.get("S3_BUCKET") or s3.get("bucket", ""),
         endpoint_url=s3.get("endpoint_url"),
-        region=s3.get("region", "us-east-1"),
-        key_prefix=s3.get("key_prefix", ""),
+        region=os.environ.get("S3_REGION") or s3.get("region", "us-east-1"),
+        key_prefix=os.environ.get("S3_KEY_PREFIX") if os.environ.get("S3_KEY_PREFIX") is not None
+        else s3.get("key_prefix", ""),
         # Credentials: environment wins over the file, so secrets need not be committed.
         access_key=os.environ.get("S3_ACCESS_KEY") or s3.get("access_key"),
         secret_key=os.environ.get("S3_SECRET_KEY") or s3.get("secret_key"),
@@ -94,6 +97,8 @@ def load_config(path: str | os.PathLike) -> Config:
     cfg.index_sink = idx.get("sink", cfg.index_sink)
     if idx.get("dir"):
         cfg.index_dir = p(idx["dir"])
+    if not cfg.bucket:
+        raise ValueError("no bucket: set s3.bucket in the config file or S3_BUCKET in the environment")
     if cfg.workers < 1:
         raise ValueError("service.workers must be at least 1")
     if cfg.upload_limit_mbps < 0:

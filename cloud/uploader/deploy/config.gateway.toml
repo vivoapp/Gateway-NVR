@@ -1,0 +1,15 @@
+# Settings for the gateway. Mounted read-only into the container.
+# The site settings (S3 endpoint, bucket, region, key prefix and the keys) are NOT here:
+# they come from /etc/vivo/cloud.env (S3_ENDPOINT_URL, S3_BUCKET, S3_REGION, S3_KEY_PREFIX,
+# S3_ACCESS_KEY, S3_SECRET_KEY).
+
+[service]
+watch_dir = "/data/recordings"        # = /srv/vivo/recordings/substream on the gateway (read-only)
+state_db = "/data/state/state.db"
+nominal_duration = 60                 # until the file name carries the end time
+workers = 2                           # cameras uploaded at the same time
+upload_limit_mbps = 0                 # 0 = no limit. Set a number if Vivo wants to cap the upload.
+
+[index]
+sink = "jsonl"                        # one JSON line per uploaded segment, in /var/lib/vivo-cloud/index
+dir = "/data/state/index"

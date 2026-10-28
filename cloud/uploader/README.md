@@ -6,8 +6,9 @@ production, MinIO for local tests). It keeps the status of every segment in a lo
 retry after a network failure and carry on after a crash or restart.
 
 It reads the segment files and **never deletes them**: the recorder's retention (M9) does that. Status:
-built on the technical evaluation uploader, steps 1 to 5 of 9 done. See `CHANGELOG.md`. The Docker
-files in this folder are for local testing; the gateway Compose files come in step 6.
+built on the technical evaluation uploader, steps 1 to 6 of 9 done. See `CHANGELOG.md`. The Docker
+files in this folder (`docker-compose.yml`, `run.sh`) are the local demo. The gateway setup is in `deploy/`
+(see `deploy/README.md`).
 
 Segment layout it expects (agreed with the recorder):
 `<camera_id>/<YYYY-MM-DD>/<camera_id>_<YYYYMMDDTHHMMSS>Z.mp4` (UTC start time). The recorder writes
