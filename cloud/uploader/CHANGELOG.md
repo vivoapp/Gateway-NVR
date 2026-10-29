@@ -2,6 +2,19 @@
 
 ## Unreleased (M19 and M20 work, built on the technical evaluation uploader)
 
+### Step 9: documentation and final touches
+- `README.md` rewritten: what it does, how it works (with a diagram), the segment file name (start and end), how to
+  run it on the gateway and on a PC, every setting, guarantees, error kinds, the index record, the log lines,
+  tests, folder layout, open items.
+- `TEST_REPORT.md`: the M19 PC acceptance run, the 18 M20 recovery tests (18 of 18 passed on the PC), the bugs the tests
+  found, the catch-up times and the retention recommendation (3 days for a 2-day outage), and what is still to do.
+- Commented configs: every setting explained in `deploy/config.gateway.toml`, `config.example.toml` and
+  `deploy/cloud.env.example`.
+- File names: the recorder (M7) now writes `<camera_id>_<start>Z_<end>Z.mp4` (agreed with the recorder developer).
+  The uploader already read both forms. `tools/fake_recorder.py --end-in-name` writes the new name (the `.part`
+  file keeps the short name, as the real recorder does); the 10-camera test setup and the M20 recovery tests use it.
+- The M20 report no longer prints an empty line for tests without extra expectations.
+
 ### Step 8: M20 gap report, recovery tests, catch-up and retention
 - `python -m segment_uploader gaps --config ...` (`--json` for the full list; `./test.sh gaps` in the test
   setup): the gap report. A gap is a segment that was never confirmed uploaded AND whose local file no longer

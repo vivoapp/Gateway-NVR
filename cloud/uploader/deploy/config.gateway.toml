@@ -1,15 +1,59 @@
-# Settings for the gateway. Mounted read-only into the container.
-# The site settings (S3 endpoint, bucket, region, key prefix and the keys) are NOT here:
-# they come from /etc/vivo/cloud.env (S3_ENDPOINT_URL, S3_BUCKET, S3_REGION, S3_KEY_PREFIX,
-# S3_ACCESS_KEY, S3_SECRET_KEY).
+# Settings for the uploader on the gateway. Mounted read-only into the container as
+# /etc/vivo-uploader/config.toml.
+#
+# The site settings and the secrets are NOT here. They come from /etc/vivo/cloud.env (template:
+# cloud.env.example) and win over this file:
+#   S3_ENDPOINT_URL  S3_REGION  S3_BUCKET  S3_KEY_PREFIX  S3_ACCESS_KEY  S3_SECRET_KEY
+# That way one image and one config file work on every gateway, and no secret is in Git.
+#
+# An unknown or misspelled setting stops the service with an error (it is never ignored).
+# After changing this file: docker compose up -d   (recreates the container with the new file).
 
 [service]
-watch_dir = "/data/recordings"        # = /srv/vivo/recordings/substream on the gateway (read-only)
+# Where the recorder (M7) writes finished segments. Inside the container; this is the gateway folder
+# /srv/vivo/recordings/substream, mounted read-only. Layout:
+#   <camera_id>/<YYYY-MM-DD>/<camera_id>_<start>Z_<end>Z.mp4        (UTC times, YYYYMMDDTHHMMSS)
+watch_dir = "/data/recordings"
+
+# The uploader's own memory (status of every segment). On the gateway this is /var/lib/vivo-cloud.
+# It can be rebuilt from the bucket, but keep it: it is what makes a restart cheap.
 state_db = "/data/state/state.db"
-nominal_duration = 60                 # until the file name carries the end time
-workers = 2                           # cameras uploaded at the same time
-upload_limit_mbps = 0                 # 0 = no limit. Set a number if Vivo wants to cap the upload.
+
+# Segment length in seconds. Only used for a file name WITHOUT an end time (then end = start + this).
+nominal_duration = 60
+
+# Seconds between looks at the recordings folder.
+scan_interval = 2
+
+# Normal scans only look at the date folders of the last N UTC days; a scan of every folder runs at start-up and
+# then every full_scan_interval seconds. Keep recent_days above the number of days a backlog can span during a
+# short restart; the hourly full scan is the safety net for anything older.
+recent_days = 2
+full_scan_interval = 3600
+
+# How many cameras are uploaded at the same time (one camera's segments always go oldest first).
+# 1 = strictly oldest first across all cameras. 2 is enough for 10 cameras at about 1.3 Mbps.
+workers = 2
+
+# Upload speed limit in megabits per second for all workers together. 0 = no limit.
+# Set a number if Vivo wants to keep part of the site's line free. If it is below the live data rate
+# (about 1.3 Mbps for 10 cameras) the uploader can never catch up after an outage.
+upload_limit_mbps = 0
+
+# Retry delay after a failure: starts at backoff_initial and doubles up to backoff_max (seconds).
+# After an outage the first retry can come up to backoff_max later, so this is also the longest extra wait
+# before catch-up starts.
+backoff_initial = 2
+backoff_max = 300
+
+# One "event=stats" log line this often (seconds): uploads, Mbps, CPU, memory, queue length. 0 = off.
+stats_interval = 60
+
+# Not set here, defaults are fine: batch_size = 50 (segments taken from the queue at a time),
+# connect_timeout = 5 and read_timeout = 60 (seconds).
 
 [index]
-sink = "jsonl"                        # one JSON line per uploaded segment, in /var/lib/vivo-cloud/index
+# One JSON line per uploaded segment, appended to <dir>/index-<date>.jsonl.
+# "none" switches it off. How the records reach Vivo's backend is not decided; a new sink goes in index.py.
+sink = "jsonl"
 dir = "/data/state/index"

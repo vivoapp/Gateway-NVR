@@ -180,7 +180,7 @@ dir = "{(self.state / 'index').as_posix()}"
             return
         self.recp = subprocess.Popen(
             [sys.executable, str(ROOT / "tools" / "fake_recorder.py"), "--dir", str(self.rec),
-             "--cameras", str(CAMERAS), "--name-format", NAME_FORMAT, "--interval", str(self.a.interval),
+             "--cameras", str(CAMERAS), "--name-format", NAME_FORMAT, "--end-in-name", "--interval", str(self.a.interval),
              "--size-mb", str(self.a.size_mb)], cwd=ROOT, stdout=subprocess.DEVNULL)
 
     def stop_recorder(self) -> None:
@@ -377,10 +377,11 @@ def write_pile(rig: Rig, minutes: int, kb: float) -> set[str]:
             t = start + timedelta(minutes=m)
             d = rig.rec / cid / t.strftime("%Y-%m-%d")
             d.mkdir(parents=True, exist_ok=True)
-            final = d / f"{cid}_{t.strftime('%Y%m%dT%H%M%S')}Z.mp4"
+            stamp, stop = t.strftime('%Y%m%dT%H%M%S'), (t + timedelta(seconds=60)).strftime('%Y%m%dT%H%M%S')
+            final = d / f"{cid}_{stamp}Z_{stop}Z.mp4"    # the name the M7 archiver writes: start and end
             if final.exists():                           # a segment of an earlier test with the same second: never rewrite it
                 continue
-            part = final.with_name(final.name + ".part")
+            part = d / f"{cid}_{stamp}Z.mp4.part"
             part.write_bytes(os.urandom(size))
             os.replace(part, final)
             keys.add(f"{rig.prefix}/{cid}/{d.name}/{final.name}")
@@ -646,8 +647,10 @@ def markdown(results: list[dict], a, rig: Rig) -> str:
                  if n.startswith(("the uploader", "the restart", "the pile", "the test"))]
         notes = {k: v for k, v in r["notes"].items() if k not in ("waiting_at_end_of_fault",)}
         if extra or notes or not r["pass"]:
-            out.append(f"**{r['id']}** " + "; ".join(f"{n}: {'yes' if ok else 'NO'} ({d})" for n, ok, d in extra)
-                       + (f". Measured: {json.dumps(notes)}" if notes else ""))
+            parts = [f"{n}: {'yes' if ok else 'NO'} ({d})" for n, ok, d in extra]
+            if notes:
+                parts.append(f"measured: {json.dumps(notes)}")
+            out.append(f"**{r['id']}** " + "; ".join(parts))
             for n, ok, d in r["checks"]:
                 if not ok and n not in [e[0] for e in extra]:
                     out.append(f"  - FAILED: {n} - {d}")

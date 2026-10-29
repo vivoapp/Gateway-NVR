@@ -208,3 +208,18 @@ def test_a_scan_interrupted_half_way_leaves_nothing_half_registered(cfg, s3, new
     monkeypatch.setattr(svc.store, "register", real)
     assert svc.scan_once() == 5                        # the next scan finds everything again
     assert svc.store.counts() == {"pending": 5}
+
+
+def test_fake_recorder_can_name_files_with_start_and_end_time(tmp_path):
+    import subprocess
+    import sys
+    from pathlib import Path
+    from segment_uploader.segment import parse_segment_name
+    tool = Path(__file__).resolve().parent.parent / "tools" / "fake_recorder.py"
+    subprocess.run([sys.executable, str(tool), "--dir", str(tmp_path), "--cameras", "1", "--count", "1",
+                    "--size-mb", "0.001", "--end-in-name", "--name-format", "VIVO-CAM-{:02d}"], check=True,
+                   capture_output=True)
+    files = list(tmp_path.glob("*/*/*.mp4"))
+    assert len(files) == 1 and not list(tmp_path.glob("*/*/*.part"))
+    info = parse_segment_name(files[0].name)
+    assert info.end_from_name and info.end_utc - info.start_utc == 60

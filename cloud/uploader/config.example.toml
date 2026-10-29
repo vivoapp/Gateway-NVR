@@ -3,8 +3,11 @@
 [service]
 watch_dir = "recordings"          # the recorder writes finished segments here
 state_db = "state/state.db"       # SQLite file with the status of every segment
-# Only finished segments are uploaded: <watch_dir>/<camera_id>/<YYYY-MM-DD>/<camera_id>_<YYYYMMDDTHHMMSS>Z.mp4
-# The recorder writes <name>.mp4.part and renames it to <name>.mp4 when the segment is complete.
+# Only finished segments are uploaded:
+#   <watch_dir>/<camera_id>/<YYYY-MM-DD>/<camera_id>_<start>Z_<end>Z.mp4     (UTC, YYYYMMDDTHHMMSS; the older name without
+#   the end time is also accepted). The recorder writes <name>.mp4.part and renames it when the segment is complete.
+# Defaults for settings not listed here: stats_interval 60, batch_size 50, connect_timeout 5, read_timeout 60.
+# See deploy/config.gateway.toml for every setting explained.
 nominal_duration = 60             # segment end = start + this, until the file name carries the end time
 recent_days = 2                   # normal scans look at the date folders of the last N days (UTC)
 full_scan_interval = 3600         # a scan of every folder at start-up and then this often (seconds)

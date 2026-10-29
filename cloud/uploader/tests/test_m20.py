@@ -69,7 +69,9 @@ def test_the_outage_pile_never_rewrites_an_existing_segment(tmp_path):
     rig = SimpleNamespace(rec=tmp_path, prefix="m20-x")
     end = datetime.now(timezone.utc).replace(microsecond=0) - timedelta(seconds=90)
     cid = m20_recovery.NAME_FORMAT.format(1)
-    existing = tmp_path / cid / end.strftime("%Y-%m-%d") / f"{cid}_{end.strftime('%Y%m%dT%H%M%S')}Z.mp4"
+    stop = end + timedelta(seconds=60)
+    existing = (tmp_path / cid / end.strftime("%Y-%m-%d")
+                / f"{cid}_{end.strftime('%Y%m%dT%H%M%S')}Z_{stop.strftime('%Y%m%dT%H%M%S')}Z.mp4")
     existing.parent.mkdir(parents=True)
     existing.write_bytes(b"earlier test")
     keys = m20_recovery.write_pile(rig, 3, 1)
