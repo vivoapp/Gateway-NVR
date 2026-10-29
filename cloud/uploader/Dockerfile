@@ -17,7 +17,7 @@ COPY segment_uploader/ segment_uploader/
 COPY tools/ tools/
 COPY docker/config.docker.toml /app/config.docker.toml
 
-RUN mkdir -p /data/recordings /data/state && chown -R 10001:10001 /data /app
+RUN mkdir -p /data/recordings /data/state /data/recovery && chown -R 10001:10001 /data /app
 USER 10001:10001
 
 CMD ["python", "-m", "segment_uploader", "run", "--config", "/app/config.docker.toml"]

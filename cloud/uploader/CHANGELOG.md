@@ -2,6 +2,42 @@
 
 ## Unreleased (M19 and M20 work, built on the technical evaluation uploader)
 
+### Step 8: M20 gap report, recovery tests, catch-up and retention
+- `python -m segment_uploader gaps --config ...` (`--json` for the full list; `./test.sh gaps` in the test
+  setup): the gap report. A gap is a segment that was never confirmed uploaded AND whose local file no longer
+  exists; neighbouring segments of one camera are merged into stretches. Uploaded segments are never gaps
+  (even if the recorder removed the file later); segments still waiting with their file present are counted
+  as "waiting", not as lost. Exit code 1 if there is any gap.
+- `tools/fault_proxy.py`: a small proxy between the uploader and the storage for the tests. It passes requests on
+  unchanged and can cut the line (also in the middle of an upload), refuse the credentials (403), answer
+  "full" (507), fail with server errors (500 / every second request), and hold an upload before it is sent on
+  or hold the answer after the storage has stored it (so the uploader can be killed at an exact moment).
+- `tools/m20_recovery.py`: the 18 scripted tests (5 internet cuts, 5 gateway reboots, 5 uploader kills,
+  3 storage errors). The real uploader and a 10-camera fake recorder run as processes of the script, so they
+  can be killed with SIGKILL. After every test: the M19 checks in strict mode, the gap report, the measured
+  catch-up time, and test-specific expectations (for example: after a kill in the middle of an upload the
+  restart recovered the interrupted upload; after a kill after the storage stored the file the restart found it
+  `already_present` and did not upload it again; wrong credentials and a full storage are logged loudly and
+  do not make the uploader hammer the storage). C5 is an outage of the agreed length (`--outage-days`,
+  default 2), compressed: the segments of the whole outage are written at once and the storage stays down for
+  `--outage-minutes` of real time. Report: `m20-recovery-report.md`.
+- `tools/m20_retention.py`: catch-up time and the retention recommendation for M9. Catch-up time = pile / (upload
+  speed - live rate). The uploader sends the oldest segment first, so the catch-up time does not make the oldest
+  file older: retention must be at least outage days + a margin (default 1 day).
+- `./test.sh recovery [--quick]`, `recovery-report`, `gaps`; a `recovery` service in `compose.test.yaml`.
+- Fixed: the storage client still made one hidden retry (`max_attempts` 1 allows one retry; it is now
+  `total_max_attempts` 1), which contradicted "retries are done by the service, persisted, with backoff" and
+  added a second connect timeout to every failed request during an outage.
+- Fixed: `test_upload_order_follows_segment_start_time...` was flaky (it asserted strict oldest-first across
+  cameras with 2 workers, which run cameras in parallel). It now sets `workers = 1`, the setting for which the
+  guarantee holds.
+- Found by a full-length run on the test machine (not an uploader bug): the C5 pile wrote a segment over the file
+  of an earlier test that had the same name (same camera, same second). The uploader behaved correctly: it saw a
+  changed file, found a different object in the bucket, did not overwrite it, and marked 14 segments `conflict`,
+  and the M19 checks reported it. The pile now never rewrites an existing segment.
+- The harness was checked against deliberate damage: skipping the "is it already there?" check makes K2 fail,
+  and not recovering interrupted uploads makes K1 fail.
+
 ### Step 7: M19 acceptance tools
 - `tools/m19_acceptance.py` (`snapshot`, `verify`, `report`): checks a run without trusting the uploader's state
   file. It re-reads the recorder's files and asks the storage for every object, then checks: every finished

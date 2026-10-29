@@ -63,6 +63,26 @@ services:
       - sim-recordings:/data/recordings
     restart: "no"
 
+  # ---- M20 recovery tests: `./test.sh recovery`. The 18 fault tests of tools/m20_recovery.py run in this
+  # container (the uploader and the fake recorder are started and killed by the script).
+  recovery:
+    profiles: [recovery]
+    image: vivo-cloud-uploader:0.1.0
+    user: "10001:10001"
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    env_file: ${TEST_DIR:-.test}/cloud.env
+    depends_on:
+      create-bucket:
+        condition: service_completed_successfully
+    volumes:
+      - recovery-data:/data/recovery
+    mem_limit: 1g                          # no CPU limit: the test harness must not limit what it measures
+    restart: "no"
+    command: ["python", "tools/m20_recovery.py", "--work", "/data/recovery"]
+
   # ---- second S3 store (M19 acceptance: "works against a second store by changing configuration only")
   # `./test.sh second` starts these. uploader2 is the same image, the same config file and the same
   # recordings; the only difference is one environment variable: S3_ENDPOINT_URL.
@@ -138,3 +158,4 @@ volumes:
   sim-recordings: {}
   sim-state: {}
   sim-state2: {}
+  recovery-data: {}

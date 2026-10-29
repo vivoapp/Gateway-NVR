@@ -132,7 +132,8 @@ class S3Storage:
                 signature_version="s3v4",
                 s3={"addressing_style": "path"},
                 # Retries are handled by the service (persisted, with backoff), not by boto.
-                retries={"max_attempts": 1, "mode": "standard"},
+                # (`max_attempts` would still allow one retry; `total_max_attempts` = 1 means none.)
+                retries={"total_max_attempts": 1, "mode": "standard"},
                 connect_timeout=cfg.connect_timeout,
                 read_timeout=cfg.read_timeout,
                 # Some S3-compatible servers do not support the newer default checksums.

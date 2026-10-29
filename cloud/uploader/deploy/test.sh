@@ -14,6 +14,11 @@
 #   ./test.sh report         the same checks as a markdown report with upload rate and CPU:  ./test.sh report > m19-report.md
 #   ./test.sh second         also start a SECOND store (second MinIO) with the same uploader, one variable changed
 #   ./test.sh second-check   both stores hold the same segments
+#   ./test.sh recovery [--quick|...]   M20: the 18 recovery tests (5 internet cuts, 5 reboots, 5 uploader kills, 3 storage
+#                            errors). Takes about 45 minutes; --quick takes about 6. Extra options go to tools/m20_recovery.py
+#                            (for example --outage-days 3 or --only C1,K2).
+#   ./test.sh recovery-report   print the report of the last recovery run:  ./test.sh recovery-report > m20-report.md
+#   ./test.sh gaps           the gap report of the running uploader (never uploaded AND file gone)
 #   ./test.sh logs           follow the uploader log
 #   ./test.sh stop           stop everything (keeps the data)
 #   ./test.sh clean          stop and delete all test data and the generated test passwords
@@ -135,6 +140,17 @@ do_second_check() {
   [[ "$FAILED" == 0 ]] || exit 1
 }
 
+do_recovery() {
+  need_docker; make_env
+  "${DC[@]}" build uploader || exit 1
+  "${DC[@]}" stop simulator uploader >/dev/null 2>&1      # the test starts its own uploader and recorder
+  echo "Running the M20 recovery tests. Leave this window open; --quick takes about 6 minutes, the full run about 45."
+  "${DC[@]}" --profile recovery run --rm -T recovery python tools/m20_recovery.py --work /data/recovery "$@"
+  local rc=$?
+  echo "Report: ./test.sh recovery-report > m20-report.md"
+  exit $rc
+}
+
 case "${1:-}" in
   start)  do_start "${2:-}" ;;
   check)  do_check ;;
@@ -144,10 +160,13 @@ case "${1:-}" in
   report)       need_docker; acc_run uploader report "${@:2}" ;;
   pause)        need_docker; "${DC[@]}" stop simulator ;;
   resume)       need_docker; "${DC[@]}" start simulator ;;
+  recovery)     shift; do_recovery "$@" ;;
+  recovery-report) need_docker; "${DC[@]}" --profile recovery run --rm --no-deps -T recovery cat /data/recovery/report/m20-recovery-report.md ;;
+  gaps)         need_docker; "${DC[@]}" exec -T uploader python -m segment_uploader gaps --config /etc/vivo-uploader/config.toml ;;
   second)       do_second ;;
   second-check) do_second_check ;;
   logs)   need_docker; "${DC[@]}" logs -f --tail 30 uploader simulator ;;
   stop)   need_docker; "${DC[@]}" --profile second down ;;
   clean)  need_docker; "${DC[@]}" --profile second down -v; rm -rf "$TEST_DIR" ;;
-  *)      echo "usage: ./test.sh [start [fast]|check|snapshot|accept|pause|resume|report|second|second-check|status|logs|stop|clean]" >&2; exit 2 ;;
+  *)      echo "usage: ./test.sh [start [fast]|check|snapshot|accept|pause|resume|report|second|second-check|recovery|recovery-report|gaps|status|logs|stop|clean]" >&2; exit 2 ;;
 esac

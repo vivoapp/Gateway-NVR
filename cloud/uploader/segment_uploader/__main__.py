@@ -14,15 +14,27 @@ from .service import Service
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="segment_uploader")
-    ap.add_argument("command", choices=["run", "status"])
+    ap.add_argument("command", choices=["run", "status", "gaps"])
     ap.add_argument("--config", default=os.environ.get("SEGMENT_UPLOADER_CONFIG", "config.toml"))
     ap.add_argument("--log-level", default="INFO")
     ap.add_argument("--remote", action="store_true", help="status: also count objects in the bucket")
     ap.add_argument("--brief", action="store_true", help="status: one line of key=value for scripts")
+    ap.add_argument("--json", action="store_true", help="gaps: full result as JSON")
     args = ap.parse_args(argv)
     logging.basicConfig(level=args.log_level.upper(), stream=sys.stdout,
                         format="%(asctime)s %(levelname)s %(message)s")
     cfg = load_config(args.config)
+
+    if args.command == "gaps":
+        # M20 gap report: never uploaded AND the local file is gone. Exit code 1 if there is any gap.
+        import json
+        from . import gaps
+        if not cfg.state_db.exists():
+            print(f"no state file at {cfg.state_db}: the uploader has not run yet", file=sys.stderr)
+            return 2
+        result = gaps.find_gaps(cfg, gaps.unfinished_rows(cfg.state_db))
+        print(json.dumps(result, indent=1) if args.json else gaps.format_text(result))
+        return 1 if result["gap_segments"] else 0
 
     if args.command == "status":
         from .service import iter_local_files

@@ -47,6 +47,25 @@ read-only recordings): `docker compose exec -T uploader python tools/m19_accepta
 --config /etc/vivo-uploader/config.toml --log - < <(docker compose logs --no-color uploader)`.
 Add `--deep` to download and hash every object (slow, strongest).
 
+## M20 recovery (on your PC, and later the same way on the gateway)
+
+```bash
+./test.sh gaps                # gap report of the running uploader: never uploaded AND the file is gone
+./test.sh recovery --quick    # about 6 minutes: all 18 tests with short faults, to see that it works
+./test.sh recovery            # the real run, about 45 minutes (leave the window open)
+./test.sh recovery --outage-days 3      # if the agreed outage length is 3 days (default 2)
+./test.sh recovery-report > m20-report.md
+```
+
+The 18 tests are 5 internet cuts (C1-C5, C5 is an outage of the agreed length), 5 gateway reboots (R1-R5),
+5 uploader kills (K1-K5) and 3 storage errors (S1-S3). `./test.sh recovery --list` prints them. Each one is
+checked from the outside afterwards (all M19 checks in strict mode plus the gap report), and the time the
+uploader needed to catch up is measured. The report ends with the calculated catch-up times and the
+retention recommendation for M9. On the gateway the same script can run inside the uploader image (it needs the same `S3_*` variables from
+`/etc/vivo/cloud.env`, a writable work folder, and it uses its own key prefix `m20-<time>`, so it never touches the
+real segments). This has not been tried on the gateway yet; the exact command is agreed when the B2 bucket exists.
+Do not run it on a gateway that is recording, and delete the `m20-*` objects afterwards.
+
 ## Install on the gateway (first time)
 
 1. Get the code to `/opt/vivo-cloud` (the repo's `cloud/` folder).

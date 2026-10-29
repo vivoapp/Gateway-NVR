@@ -146,6 +146,9 @@ A real run is saved in `logs/docker-test-results.txt` (`./run.sh test`).
 | `test_speed_workers.py` | Speed limit applied once, parallel cameras, order per camera, outage stops all workers |
 | `test_index.py` | Index record contents, sent once, failing sink, default file sink, sink setting |
 | `test_status_and_config.py` | The `status` command used by `run.sh`, environment overrides |
+| `test_gaps.py` | M20 gap report: only "never uploaded and file gone" is a gap; stretches, cameras, exit code, JSON |
+| `test_fault_proxy.py` | The M20 test proxy: passes requests through intact; cut line, refused credentials, full, server errors; held answers |
+| `test_m20.py` | Retention and catch-up calculation; a short end-to-end run of the 18-test recovery script |
 | `test_minio_integration.py` | Real MinIO: round trip with matching ETag, server rejects a wrong `Content-MD5`, duplicate and conflict |
 
 ## Running without Docker

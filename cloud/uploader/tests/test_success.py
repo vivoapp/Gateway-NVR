@@ -108,6 +108,7 @@ def test_upload_order_follows_segment_start_time_not_file_time_or_listing_order(
     from segment_uploader.service import Service
     from segment_uploader.storage import S3Storage
 
+    cfg.workers = 1       # strict oldest-first across cameras holds with one worker (with 2, cameras run in parallel)
     real_iter = service_module.iter_local_files
     monkeypatch.setattr(service_module, "iter_local_files",
                         lambda c: iter(sorted(real_iter(c), reverse=True)))   # listing: newest name first
