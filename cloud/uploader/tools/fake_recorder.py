@@ -13,7 +13,7 @@ finished, so the uploader never sees half-written files.
 import argparse
 import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -26,6 +26,10 @@ def main() -> None:
                     help='camera id pattern, e.g. "VIVO-CAM-{:02d}" for the real names')
     ap.add_argument("--size-mb", type=float, default=2.0)
     ap.add_argument("--count", type=int, default=0, help="segments per camera (0 = run forever)")
+    ap.add_argument("--start-hours-ago", type=float, default=0,
+                    help="simulate a clock that starts this many hours ago (for compressed long runs)")
+    ap.add_argument("--time-step", type=float, default=0,
+                    help="with --start-hours-ago: simulated seconds that pass per round (60 = one segment per minute)")
     ap.add_argument("--retain-minutes", type=float, default=0,
                     help="delete own segments older than this, like the recorder's retention (0 = keep all)")
     args = ap.parse_args()
@@ -35,7 +39,11 @@ def main() -> None:
     try:
         while args.count == 0 or n < args.count:
             n += 1
-            now = datetime.now(timezone.utc)
+            if args.start_hours_ago and args.time_step:
+                now = (datetime.now(timezone.utc) - timedelta(hours=args.start_hours_ago)
+                       + timedelta(seconds=args.time_step * (n - 1)))
+            else:
+                now = datetime.now(timezone.utc)
             for cam in range(1, args.cameras + 1):
                 camera_id = args.name_format.format(cam)
                 cam_dir = root / camera_id / now.strftime("%Y-%m-%d")
@@ -43,8 +51,7 @@ def main() -> None:
                 final = cam_dir / f"{camera_id}_{now.strftime('%Y%m%dT%H%M%S')}Z.mp4"
                 part = final.with_name(final.name + ".part")
                 with open(part, "wb") as f:
-                    for _ in range(max(int(args.size_mb), 1)):
-                        f.write(os.urandom(1024 * 1024))
+                    f.write(os.urandom(max(int(args.size_mb * 1024 * 1024), 1)))
                 os.replace(part, final)                 # atomic: file appears complete
                 print(f"recorded {final} ({final.stat().st_size} bytes)", flush=True)
             if args.retain_minutes > 0:

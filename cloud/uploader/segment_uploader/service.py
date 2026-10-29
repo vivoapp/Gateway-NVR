@@ -99,6 +99,8 @@ class Service:
         self.sink = sink or make_sink(cfg)
         self._lock = threading.Lock()   # guards the pause state below (workers share it)
         self._index_pause_until = 0.0
+        self._win = {"count": 0, "bytes": 0}      # what was uploaded since the last stats line
+        self._last_stats = (time.monotonic(), time.process_time())
         self.clock = clock
         self.jitter = jitter
         self._known: set[str] = set()   # keys already in the state file: skipped by normal scans
@@ -276,6 +278,9 @@ class Service:
             self.store.mark_uploaded(key, remote.etag, self.clock())
             with self._lock:
                 self._outage_streak = 0
+                if action == "uploaded":
+                    self._win["count"] += 1
+                    self._win["bytes"] += size
             log.info("event=%s key=%s size=%d sha256=%s attempts=%d ms=%d", action, key, size, sha,
                      attempts, (time.monotonic() - t0) * 1000)
             return "uploaded"                 # the local file is never touched: the recorder owns it
@@ -329,6 +334,33 @@ class Service:
             sent += 1
         return sent
 
+    # ---- measurements -----------------------------------------------------------------
+    def log_stats(self) -> None:
+        """One line with the upload rate and the CPU and memory used by this process.
+
+        Used for the M19 report ("measured upload rate and CPU use at 10 cameras"). cpu_pct is the
+        share of one CPU core used since the previous line.
+        """
+        wall0, cpu0 = self._last_stats
+        wall, cpu = time.monotonic(), time.process_time()
+        self._last_stats = (wall, cpu)
+        with self._lock:
+            count, nbytes = self._win["count"], self._win["bytes"]
+            self._win = {"count": 0, "bytes": 0}
+        window = max(wall - wall0, 1e-9)
+        rss_mb = 0.0
+        try:
+            with open("/proc/self/status") as f:
+                for line in f:
+                    if line.startswith("VmRSS:"):
+                        rss_mb = int(line.split()[1]) / 1024
+        except OSError:
+            pass
+        pending = self.store.counts().get(st.PENDING, 0)
+        log.info("event=stats window_s=%.0f uploaded=%d bytes=%d mbps=%.3f cpu_pct=%.1f rss_mb=%.0f "
+                 "pending=%d workers=%d limit_mbps=%g", window, count, nbytes, nbytes * 8 / window / 1e6,
+                 (cpu - cpu0) / window * 100, rss_mb, pending, self.cfg.workers, self.cfg.upload_limit_mbps)
+
     # ---- main loop ------------------------------------------------------------------
     def run_once(self) -> dict[str, int]:
         self.scan_once()
@@ -339,11 +371,16 @@ class Service:
     def run_forever(self, stop: threading.Event) -> None:
         self.recover()
         log.info("event=running watch_dir=%s bucket=%s", self.cfg.watch_dir, self.cfg.bucket)
+        next_stats = time.monotonic() + self.cfg.stats_interval
+        self._last_stats = (time.monotonic(), time.process_time())
         while not stop.is_set():
             try:
                 self.scan_once()
                 self.upload_due(should_stop=stop.is_set)
                 self.deliver_index()
+                if self.cfg.stats_interval > 0 and time.monotonic() >= next_stats:
+                    self.log_stats()
+                    next_stats = time.monotonic() + self.cfg.stats_interval
             except Exception:
                 log.exception("event=loop_error")
             stop.wait(self.cfg.scan_interval)

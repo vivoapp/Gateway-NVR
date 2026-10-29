@@ -2,6 +2,24 @@
 
 ## Unreleased (M19 and M20 work, built on the technical evaluation uploader)
 
+### Step 7: M19 acceptance tools
+- `tools/m19_acceptance.py` (`snapshot`, `verify`, `report`): checks a run without trusting the uploader's state
+  file. It re-reads the recorder's files and asks the storage for every object, then checks: every finished
+  segment uploaded; size, MD5/ETag and SHA-256 equal to the local file (`--deep` downloads and hashes every
+  object); the bucket holds exactly the uploaded segments; no segment logged as uploaded twice; every
+  uploaded segment has a correct index record; local files unchanged since `snapshot`. `report` adds the
+  measured upload rate and CPU as markdown. 12 tests prove it passes on a good run and fails on each kind of damage.
+- The uploader logs `event=stats` every `stats_interval` seconds (60): uploads, bytes, Mbps, CPU % of one core,
+  memory, pending count.
+- The checker works on a live system: segments from the last `--grace` seconds (30) count as in flight and
+  are reported, not hidden. `--strict` (no grace) is for the final run after the cameras stop and the queue is
+  empty. (A first live run on a PC showed 10 objects "not in state file": the recorder and uploader had moved
+  on between the moments the checker read the files, the state file, the bucket and the index.)
+- `deploy/test.sh`: `snapshot`, `accept`, `report`, and `second` / `second-check` (a second MinIO and a second
+  uploader that differs only in `S3_ENDPOINT_URL`).
+- `tools/fake_recorder.py`: `--name-format`, fractional `--size-mb`, `--start-hours-ago` + `--time-step` to
+  produce a day of segments in minutes.
+
 ### Step 6: gateway Docker and Compose (`deploy/`)
 - `deploy/compose.yaml`: user 10001, `/srv/vivo/recordings/substream` read-only, read-only container, all
   Linux rights dropped, 1 CPU / 512 MB / 200 processes, logs 20 MB x 5, secrets from `/etc/vivo/cloud.env`,

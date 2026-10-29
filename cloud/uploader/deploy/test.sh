@@ -5,6 +5,15 @@
 #   ./test.sh start [fast]   build and start (fast = a new segment every 5 s instead of 60 s)
 #   ./test.sh check          prove the hardening and compare recorded / uploaded / stored
 #   ./test.sh status         counts from the uploader
+#   ./test.sh snapshot       remember the local files now (so `accept` can prove they were not changed)
+#   ./test.sh accept         M19 acceptance checks (re-reads files and storage, does not trust the uploader).
+#                            While running, segments from the last 30 s count as "in flight" (and are reported).
+#   ./test.sh pause          stop the simulated cameras, so the queue can drain
+#   ./test.sh accept --strict   the final check, after `pause` and a short wait: no grace, any difference fails
+#   ./test.sh resume         start the simulated cameras again
+#   ./test.sh report         the same checks as a markdown report with upload rate and CPU:  ./test.sh report > m19-report.md
+#   ./test.sh second         also start a SECOND store (second MinIO) with the same uploader, one variable changed
+#   ./test.sh second-check   both stores hold the same segments
 #   ./test.sh logs           follow the uploader log
 #   ./test.sh stop           stop everything (keeps the data)
 #   ./test.sh clean          stop and delete all test data and the generated test passwords
@@ -91,12 +100,54 @@ PY
   [[ "$FAILED" == 0 ]] && printf '%sRESULT: PASS%s\n' "$G" "$N" || { printf '%sRESULT: CHECK THE LINES ABOVE%s\n' "$R" "$N"; exit 1; }
 }
 
+DCP=("${DC[@]}" --profile second)     # same project, with the optional second store visible to exec / logs
+ACC=(python tools/m19_acceptance.py)
+CONF=(--config /etc/vivo-uploader/config.toml)
+
+# run an acceptance command in the uploader container, feeding it the uploader's log
+acc_run() {  # acc_run <service> <command> [extra args]
+  local svc="$1" cmd="$2"; shift 2
+  local manifest=()
+  "${DCP[@]}" exec -T "$svc" test -f /data/state/manifest.json >/dev/null 2>&1 && manifest=(--manifest /data/state/manifest.json)
+  "${DCP[@]}" logs --no-color "$svc" 2>/dev/null | "${DCP[@]}" exec -T "$svc" "${ACC[@]}" "$cmd" "${CONF[@]}" "${manifest[@]}" --log - "$@"
+}
+
+do_second() {
+  need_docker; make_env
+  "${DC[@]}" build uploader || exit 1
+  "${DC[@]}" up -d || exit 1
+  "${DC[@]}" --profile second up -d || exit 1
+  echo "Second store started. Wait a minute, then: ./test.sh second-check"
+}
+
+do_second_check() {
+  need_docker; FAILED=0
+  local a b
+  a="$("${DC[@]}" exec -T uploader python -m segment_uploader status --brief "${CONF[@]}" 2>/dev/null | tail -n 1)"
+  b="$("${DCP[@]}" exec -T uploader2 python -m segment_uploader status --brief "${CONF[@]}" 2>/dev/null | tail -n 1)"
+  echo "  store 1: $a"; echo "  store 2: $b"
+  [[ "$(get "$a" bucket_objects)" =~ ^[0-9]+$ && "$(get "$b" bucket_objects)" =~ ^[0-9]+$ ]] || { fail "a store does not answer"; exit 1; }
+  [[ "$(get "$b" uploaded)" -gt 0 ]] && ok "the second store receives segments with the same image and config file" || fail "nothing in the second store"
+  local d; d=$(( $(get "$a" bucket_objects) - $(get "$b" bucket_objects) )); d=${d#-}
+  [[ "$d" -le 20 ]] && ok "both stores hold the same segments (difference $d = segments still in flight)" || fail "the stores differ by $d segments"
+  echo "  full check of the second store:"
+  acc_run uploader2 verify | sed 's/^/    /'
+  [[ "$FAILED" == 0 ]] || exit 1
+}
+
 case "${1:-}" in
   start)  do_start "${2:-}" ;;
   check)  do_check ;;
   status) need_docker; "${DC[@]}" exec -T uploader python -m segment_uploader status --remote --config /etc/vivo-uploader/config.toml ;;
+  snapshot)     need_docker; "${DC[@]}" exec -T uploader "${ACC[@]}" snapshot "${CONF[@]}" --out /data/state/manifest.json ;;
+  accept)       need_docker; acc_run uploader verify "${@:2}" ;;
+  report)       need_docker; acc_run uploader report "${@:2}" ;;
+  pause)        need_docker; "${DC[@]}" stop simulator ;;
+  resume)       need_docker; "${DC[@]}" start simulator ;;
+  second)       do_second ;;
+  second-check) do_second_check ;;
   logs)   need_docker; "${DC[@]}" logs -f --tail 30 uploader simulator ;;
-  stop)   need_docker; "${DC[@]}" down ;;
-  clean)  need_docker; "${DC[@]}" down -v; rm -rf "$TEST_DIR" ;;
-  *)      echo "usage: ./test.sh [start [fast]|check|status|logs|stop|clean]" >&2; exit 2 ;;
+  stop)   need_docker; "${DC[@]}" --profile second down ;;
+  clean)  need_docker; "${DC[@]}" --profile second down -v; rm -rf "$TEST_DIR" ;;
+  *)      echo "usage: ./test.sh [start [fast]|check|snapshot|accept|pause|resume|report|second|second-check|status|logs|stop|clean]" >&2; exit 2 ;;
 esac

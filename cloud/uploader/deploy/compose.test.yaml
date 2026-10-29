@@ -63,7 +63,78 @@ services:
       - sim-recordings:/data/recordings
     restart: "no"
 
+  # ---- second S3 store (M19 acceptance: "works against a second store by changing configuration only")
+  # `./test.sh second` starts these. uploader2 is the same image, the same config file and the same
+  # recordings; the only difference is one environment variable: S3_ENDPOINT_URL.
+  minio2:
+    profiles: [second]
+    image: ${MINIO_IMAGE:-cgr.dev/chainguard/minio:latest}
+    user: "0:0"
+    command: server /data
+    env_file: ${TEST_DIR:-.test}/minio.env
+    volumes: [minio2-data:/data]
+    restart: "no"
+
+  create-bucket2:
+    profiles: [second]
+    image: vivo-cloud-uploader:0.1.0
+    depends_on: [minio2]
+    env_file: ${TEST_DIR:-.test}/cloud.env
+    environment:
+      S3_ENDPOINT_URL: http://minio2:9000
+    restart: "no"
+    command:
+      - python
+      - -c
+      - |
+        import os, time, boto3
+        from botocore.config import Config
+        c = boto3.client("s3", endpoint_url=os.environ["S3_ENDPOINT_URL"], region_name="us-east-1",
+                         aws_access_key_id=os.environ["S3_ACCESS_KEY"],
+                         aws_secret_access_key=os.environ["S3_SECRET_KEY"],
+                         config=Config(s3={"addressing_style": "path"}, retries={"max_attempts": 1},
+                                       connect_timeout=3, read_timeout=10))
+        for _ in range(90):
+            try:
+                try:
+                    c.head_bucket(Bucket=os.environ["S3_BUCKET"])
+                except Exception as e:
+                    if getattr(e, "response", {}).get("Error", {}).get("Code") not in ("404", "NoSuchBucket", "NotFound"):
+                        raise
+                    c.create_bucket(Bucket=os.environ["S3_BUCKET"])
+                print("bucket ready")
+                break
+            except Exception:
+                time.sleep(1)
+        else:
+            raise SystemExit("second MinIO did not become ready")
+
+  uploader2:
+    profiles: [second]
+    image: vivo-cloud-uploader:0.1.0
+    user: "10001:10001"
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    env_file: ${TEST_DIR:-.test}/cloud.env
+    environment:
+      S3_ENDPOINT_URL: http://minio2:9000           # <- the only difference from `uploader`
+    command: ["python", "-m", "segment_uploader", "run", "--config", "/etc/vivo-uploader/config.toml"]
+    depends_on:
+      create-bucket2:
+        condition: service_completed_successfully
+    volumes:
+      - sim-recordings:/data/recordings:ro
+      - sim-state2:/data/state
+      - ./config.gateway.toml:/etc/vivo-uploader/config.toml:ro
+    cpus: 1.0
+    mem_limit: 512m
+    restart: "no"
+
 volumes:
   minio-data: {}
+  minio2-data: {}
   sim-recordings: {}
   sim-state: {}
+  sim-state2: {}

@@ -5,7 +5,7 @@ Installed on the gateway at `/opt/vivo-cloud`. One folder per module. Secrets ar
 
 | Folder | Module | Status |
 |---|---|---|
-| `uploader/` | M19 archive upload queue + M20 interrupted upload and recovery | In progress (steps 1 to 6 of 9 done) |
+| `uploader/` | M19 archive upload queue + M20 interrupted upload and recovery | In progress (steps 1 to 7 of 9 done) |
 | `discovery/` | M4 ONVIF discovery | Not started |
 | `agent/` | M21 Edge Agent, gateway identity | Not started |
 | `hardening/` | M23 hardening | Not started |

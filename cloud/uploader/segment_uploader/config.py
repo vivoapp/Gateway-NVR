@@ -22,6 +22,8 @@ class Config:
     # Length used for a segment's end time while the file name does not carry one.
     nominal_duration: float = 60.0
     scan_interval: float = 2.0
+    # One `event=stats` log line this often (seconds): upload rate, CPU and memory of the uploader.
+    stats_interval: float = 60.0
     # Normal scans look only at date folders from the last `recent_days` days (UTC today and
     # back). A full scan of every folder runs at start-up and then every `full_scan_interval`
     # seconds. This keeps the scan cheap when days of segments are on the disk.
@@ -47,7 +49,7 @@ class Config:
 
 
 SERVICE_KEYS = {"watch_dir", "state_db", "nominal_duration", "scan_interval", "recent_days",
-                "full_scan_interval", "backoff_initial", "backoff_max", "batch_size",
+                "full_scan_interval", "stats_interval", "backoff_initial", "backoff_max", "batch_size",
                 "connect_timeout", "read_timeout", "upload_limit_mbps", "workers"}
 INDEX_KEYS = {"sink", "dir"}
 S3_KEYS = {"endpoint_url", "bucket", "region", "key_prefix", "access_key", "secret_key"}
@@ -89,7 +91,7 @@ def load_config(path: str | os.PathLike) -> Config:
     # Environment overrides, handy in containers: they win over the file.
     if os.environ.get("S3_ENDPOINT_URL"):
         cfg.endpoint_url = os.environ["S3_ENDPOINT_URL"]
-    for name in ("nominal_duration", "scan_interval", "recent_days", "full_scan_interval",
+    for name in ("nominal_duration", "scan_interval", "recent_days", "full_scan_interval", "stats_interval",
                  "backoff_initial", "backoff_max", "connect_timeout", "read_timeout",
                  "batch_size", "upload_limit_mbps", "workers"):
         if name in svc:

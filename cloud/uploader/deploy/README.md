@@ -26,6 +26,27 @@ cd cloud/uploader/deploy
 ./test.sh clean           # removes everything, including the generated test passwords
 ```
 
+## M19 acceptance (on your PC, and later the same way on the gateway)
+
+```bash
+./test.sh start               # a segment per camera per minute (use "fast" for a quick look)
+./test.sh snapshot            # remember the local files, to prove later they were not changed
+# ... leave it running (24 hours for the real acceptance run) ...
+./test.sh accept              # checksums, exactly once, index records, local files unchanged
+                              # (while running, segments from the last 30 s count as "in flight" and are reported)
+./test.sh pause               # stop the simulated cameras; wait about 10 seconds for the queue to empty
+./test.sh accept --strict     # the final check: no grace, any difference fails
+./test.sh resume
+./test.sh report > m19-report.md      # the same, as a report with upload rate and CPU
+./test.sh second              # also start a second store (second MinIO), same image and config file
+./test.sh second-check        # both stores hold the same segments
+```
+
+On the gateway the same checker runs inside the container (it has the config, the secrets and the
+read-only recordings): `docker compose exec -T uploader python tools/m19_acceptance.py report
+--config /etc/vivo-uploader/config.toml --log - < <(docker compose logs --no-color uploader)`.
+Add `--deep` to download and hash every object (slow, strongest).
+
 ## Install on the gateway (first time)
 
 1. Get the code to `/opt/vivo-cloud` (the repo's `cloud/` folder).
