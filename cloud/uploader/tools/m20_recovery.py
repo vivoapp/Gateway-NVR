@@ -317,7 +317,8 @@ def not_hammering(rig, ev, mode="down", fault_s=0.0):
 # ---- internet cuts -------------------------------------------------------------------------
 def cut(seconds: float):
     def run(rig: Rig):
-        s = rig.T(seconds)
+        # never shorter than one and a half recorder rounds, so the cut always meets an upload attempt
+        s = max(rig.T(seconds), rig.a.interval * 1.5 + 2)
         rig.proxy.set_mode("down")
         time.sleep(s)
         rig.notes["fault_s"] = s
@@ -333,10 +334,11 @@ def post_cut(rig, ev):
 def run_flaps(rig: Rig):
     rig.proxy.delay_before_put = 0.4                     # uploads are in flight when the line goes
     for _ in range(5):
-        time.sleep(rig.T(4))
+        rig.wait_uploading(rig.a.interval + 10)          # cut the line while an upload is really in flight
         rig.proxy.set_mode("down")
         time.sleep(rig.T(3))
         rig.proxy.set_mode("ok")
+        time.sleep(rig.T(4))
     rig.proxy.delay_before_put = 0.0
     rig.notes["fault_s"] = 5 * rig.T(3)
     rig.after_fault()

@@ -35,6 +35,10 @@
   of an earlier test that had the same name (same camera, same second). The uploader behaved correctly: it saw a
   changed file, found a different object in the bucket, did not overwrite it, and marked 14 segments `conflict`,
   and the M19 checks reported it. The pile now never rewrites an existing segment.
+- Found on the PC run: C1 failed once in `--quick` mode ("0 failed attempts logged as outage"): the cut (3.75 s)
+  fell between two recorder rounds, so the uploader made no request during it. Cuts are now at least 1.5
+  recorder rounds long, and the C3 flaps wait for an upload to be in flight before cutting the line. The proxy
+  no longer prints a traceback when a killed uploader resets its connection.
 - The harness was checked against deliberate damage: skipping the "is it already there?" check makes K2 fail,
   and not recovering interrupted uploads makes K1 fail.
 

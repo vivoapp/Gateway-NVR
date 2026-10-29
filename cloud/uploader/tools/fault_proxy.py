@@ -185,6 +185,9 @@ class FaultProxy:
             daemon_threads = True
             request_queue_size = 128
 
+            def handle_error(self, request, client_address):     # a killed uploader resets its connection: expected
+                pass
+
         self._srv = Server((host, port), Handler)
         self.host, self.port = host, self._srv.server_address[1]
         self.url = f"http://{self.host}:{self.port}"
