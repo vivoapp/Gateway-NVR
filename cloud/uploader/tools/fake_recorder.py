@@ -49,6 +49,8 @@ def main() -> None:
                 cam_dir = root / camera_id / now.strftime("%Y-%m-%d")
                 cam_dir.mkdir(parents=True, exist_ok=True)
                 final = cam_dir / f"{camera_id}_{now.strftime('%Y%m%dT%H%M%S')}Z.mp4"
+                if final.exists():                      # a restart in the same second: never rewrite a segment
+                    continue
                 part = final.with_name(final.name + ".part")
                 with open(part, "wb") as f:
                     f.write(os.urandom(max(int(args.size_mb * 1024 * 1024), 1)))

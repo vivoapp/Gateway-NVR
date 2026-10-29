@@ -238,6 +238,12 @@ class Service:
             try:
                 before = path.stat()
             except FileNotFoundError:
+                if row["uploaded_at"] is not None:
+                    # Already uploaded and verified earlier; only a re-check was pending (the file had
+                    # changed on disk) and retention has removed it since. Nothing was lost.
+                    self.store.set_state(key, st.UPLOADED)
+                    log.info("event=already_uploaded_file_gone key=%s", key)
+                    return "skipped"
                 self.store.set_state(key, st.MISSING, "local file vanished before upload")
                 log.error("event=missing key=%s", key)
                 return "skipped"

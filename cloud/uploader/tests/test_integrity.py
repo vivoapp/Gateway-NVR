@@ -95,3 +95,22 @@ def test_server_rejecting_a_bad_checksum_is_a_file_error_not_an_outage(cfg, s3, 
     assert row["state"] == "pending" and "BadDigest" in row["last_error"]
     assert svc._pause_until == 0                      # service did not pause: other files can proceed
     assert path.exists()
+
+
+def test_a_segment_already_uploaded_is_not_reported_missing_when_retention_removes_it_during_a_recheck(
+        cfg, s3, new_service):
+    """Seen on a PC: the file changed on disk after its upload, so it was queued for a re-check; the
+    recorder's retention deleted it before the re-check ran. The verified copy is in the bucket: no gap."""
+    path = write_segment(cfg, seg_rel("cam01", 1), os.urandom(3000))
+    svc = new_service()
+    step(svc, 2)
+    assert svc.store.get(KEY)["state"] == "uploaded"
+
+    path.write_bytes(os.urandom(4000))                     # same name, rewritten
+    svc.scan_once(full=True)                               # noticed: queued for a re-check
+    assert svc.store.get(KEY)["state"] == "pending"
+    path.unlink()                                          # retention removes it first
+    svc.upload_due()
+
+    assert svc.store.get(KEY)["state"] == "uploaded"       # not "missing"
+    assert len(s3.objects()) == 1

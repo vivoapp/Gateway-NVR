@@ -182,12 +182,26 @@ def verify(cfg, manifest=None, log_events=None, deep=False, grace: float = 30.0)
     extra = listed - set(uploaded) - fresh_obj
     absent = set(uploaded) - listed - fresh_rows
     skipped = len((listed - set(uploaded)) & fresh_obj) + len(fresh_rows - listed)
+    extra_states = Counter(rows[k]["state"] if k in rows else "not in the state file" for k in extra)
     chk.add("the bucket holds exactly the uploaded segments", not extra and not absent,
             f"{len(listed)} objects, {len(uploaded)} uploaded"
             + (f"; {skipped} from the last {grace:g} s, still in flight" if skipped else "")
-            + (f"; NOT in state file: {examples(extra)}" if extra else "")
+            + (f"; NOT marked uploaded ({dict(extra_states)}): {examples(extra)}" if extra else "")
             + (f"; missing in bucket: {examples(absent)}" if absent else ""))
     info["bucket_objects"] = len(listed)
+
+    # 3b. nothing is stuck
+    stuck = {}
+    for k, r in rows.items():
+        if r["state"] in ("conflict", "missing"):
+            stuck[k] = r
+        elif r["state"] in ("pending", "uploading") and (r["first_seen"] or 0) <= cut:
+            stuck[k] = r
+    stuck_states = Counter(r["state"] for r in stuck.values())
+    first = next(iter(stuck.values()), None)
+    chk.add("no segment is stuck (pending, conflict or missing)", not stuck,
+            "none" if not stuck else f"{dict(stuck_states)}: {examples(stuck)}"
+            + (f"; first reason: {first['last_error']}" if first["last_error"] else ""))
 
     # 4. exactly once (log)
     if log_events:
@@ -224,7 +238,7 @@ def verify(cfg, manifest=None, log_events=None, deep=False, grace: float = 30.0)
             + (f"; {fresh_idx} from the last {grace:g} s, record still on the way" if fresh_idx else "")
             + (f"; MISSING: {examples(missing)}" if missing else "")
             + (f"; wrong values: {examples(wrong)}" if wrong else "")
-            + (f"; for segments not uploaded: {examples(stray)}" if stray else "")
+            + (f"; for segments not marked uploaded: {examples(stray)}" if stray else "")
             + (f" ({repeats} repeated records, allowed)" if repeats else ""))
 
     # 6. local files untouched

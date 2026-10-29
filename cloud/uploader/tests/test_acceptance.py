@@ -81,7 +81,7 @@ def test_an_extra_object_fails(run, capsys):
     s3 = run["s3"]
     s3.client.put_object(Bucket=s3.bucket, Key="site-1/cam09/2026-10-20/cam09_20261020T100000Z.mp4", Body=b"x")
     assert go(run) == 1
-    assert "NOT in state file" in capsys.readouterr().out
+    assert "NOT marked uploaded" in capsys.readouterr().out
 
 
 def test_a_missing_index_record_fails(run, tmp_path, capsys):
@@ -138,3 +138,23 @@ def test_old_damage_is_not_excused_by_the_grace_period(run, s3, cfg, capsys):
     # make the grace window start after everything above happened
     assert go(run, "verify", "--grace", "0.0001") == 1
     assert "WRONG" in capsys.readouterr().out
+
+
+def test_a_segment_rewritten_after_upload_is_reported_as_a_conflict_not_hidden(run, cfg, new_service, capsys):
+    """The recorder (or a simulator restart) wrote the same file name again with different content."""
+    path = cfg.watch_dir / seg_rel("cam01", 2)
+    path.write_bytes(os.urandom(7777))                       # same name, different bytes
+    svc = new_service()
+    svc.recover()                                            # start-up: a full scan notices the change
+    step(svc, 3)
+    assert svc.store.get(seg_key("cam01", 2))["state"] == "conflict"
+    assert go(run) == 1
+    out = capsys.readouterr().out
+    assert "stuck" in out and "conflict" in out and "different object already exists" in out
+
+
+def test_a_segment_waiting_too_long_is_reported_as_stuck(run, cfg, new_service, capsys):
+    write_segment(cfg, seg_rel("cam01", 8), os.urandom(100))
+    new_service().scan_once()                                # registered, never uploaded
+    assert go(run) == 1
+    assert "stuck" in capsys.readouterr().out

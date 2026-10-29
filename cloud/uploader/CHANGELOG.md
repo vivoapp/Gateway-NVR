@@ -15,6 +15,16 @@
   are reported, not hidden. `--strict` (no grace) is for the final run after the cameras stop and the queue is
   empty. (A first live run on a PC showed 10 objects "not in state file": the recorder and uploader had moved
   on between the moments the checker read the files, the state file, the bucket and the index.)
+- New check "no segment is stuck (pending, conflict or missing)", and the bucket check now says which state an
+  unexpected object has in the state file. (On a PC, restarting the containers started a second simulator in
+  the same second as the first; it wrote the same 10 file names again with different content. The uploader
+  correctly refused to overwrite the stored objects and marked the 10 segments `conflict`; the checker had
+  called them "not in state file".) The simulator no longer rewrites an existing segment.
+- Found on the PC run: a segment that was already uploaded and verified could end as `missing` ("local file
+  vanished before upload"): its file had been rewritten on disk (the doubled simulator), so it was queued for
+  a re-check, and the recorder's retention removed it before the re-check ran. Now such a segment goes back
+  to `uploaded`, because the verified copy is in the bucket and nothing was lost. A segment that was never
+  uploaded and vanishes is still `missing` (it is the gap report's input).
 - `deploy/test.sh`: `snapshot`, `accept`, `report`, and `second` / `second-check` (a second MinIO and a second
   uploader that differs only in `S3_ENDPOINT_URL`).
 - `tools/fake_recorder.py`: `--name-format`, fractional `--size-mb`, `--start-hours-ago` + `--time-step` to
