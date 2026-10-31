@@ -1,0 +1,17 @@
+# Settings for the temporary gateway test only (not the production settings in ../config.gateway.toml).
+[service]
+watch_dir = "/data/recordings"
+state_db = "/data/state/state.db"
+nominal_duration = 60
+scan_interval = 2
+recent_days = 2
+full_scan_interval = 3600
+workers = 1                 # gentle: one upload at a time
+upload_limit_mbps = 8       # gentle: do not disturb the recorder's disk and CPU (0 = no limit)
+backoff_initial = 2
+backoff_max = 300
+stats_interval = 60
+
+[index]
+sink = "jsonl"
+dir = "/data/state/index"
