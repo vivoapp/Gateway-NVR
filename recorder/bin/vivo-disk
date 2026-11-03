@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# M8: disk use and SSD health in one command (tools/vivo_disk.py). usage: sudo vivo-disk [--fast] [--json]
+ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+exec python3 "$ROOT/tools/vivo_disk.py" "$@"

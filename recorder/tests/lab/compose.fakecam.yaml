@@ -1,0 +1,27 @@
+# Lab override: ten fake cameras (go2rtc looping test clips) for tests/lab/lab.sh.
+# Used together with tests/lab/compose.lab.yaml; never on a gateway.
+services:
+  fakecam:
+    image: ${GO2RTC_IMAGE}:${GO2RTC_VERSION}@${GO2RTC_DIGEST}
+    container_name: fakecam
+    restart: unless-stopped
+    env_file:
+      - ${VIVO_ETC}/secrets.env
+    volumes:
+      - type: bind
+        source: ./tests/lab/fakecam.yaml
+        target: /config/go2rtc.yaml
+        read_only: true
+      - type: bind
+        source: ${LAB_CLIPS}
+        target: /clips
+        read_only: true
+
+  go2rtc:
+    depends_on:
+      - fakecam
+
+  storage:
+    environment:
+      # A pretend recording disk of this many bytes (empty: the real disk), tests/lab/README.md.
+      VIVO_LAB_DISK_BYTES: ${VIVO_LAB_DISK_BYTES:-}

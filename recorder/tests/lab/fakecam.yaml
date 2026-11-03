@@ -1,0 +1,35 @@
+# go2rtc as ten fake cameras for the lab (tests/lab/README.md). Each stream loops a test clip
+# from /clips without re-encoding, so the recorder's go2rtc pulls RTSP exactly as from a camera.
+# The login comes from LABCAM_USER / LABCAM_PASSWORD in the lab's secrets.env.
+rtsp:
+  listen: :8554
+  username: ${LABCAM_USER}
+  password: ${LABCAM_PASSWORD}
+api:
+  listen: ""
+log:
+  format: text
+  level: warn
+streams:
+  cam01_main: &main
+  - exec:ffmpeg -hide_banner -loglevel error -re -stream_loop -1 -i /clips/main.mkv -c copy -rtsp_transport tcp -f rtsp {output}
+  cam01_sub: &sub
+  - exec:ffmpeg -hide_banner -loglevel error -re -stream_loop -1 -i /clips/sub.mkv -c copy -rtsp_transport tcp -f rtsp {output}
+  cam02_main: *main
+  cam02_sub: *sub
+  cam03_main: *main
+  cam03_sub: *sub
+  cam04_main: *main
+  cam04_sub: *sub
+  cam05_main: *main
+  cam05_sub: *sub
+  cam06_main: *main
+  cam06_sub: *sub
+  cam07_main: *main
+  cam07_sub: *sub
+  cam08_main: *main
+  cam08_sub: *sub
+  cam09_main: *main
+  cam09_sub: *sub
+  cam10_main: *main
+  cam10_sub: *sub

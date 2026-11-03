@@ -10,7 +10,11 @@
 # them for this development environment. Paths, model and firmware come from tools/onvif_probe.py.
 
 site:
-  record_days: 7               # continuous main-stream retention (M9 tunes this)
+  record_days: 7               # main-stream retention in days (M9)
+  substream_days: 3            # local substream segments for the cloud uploader (M9; proposal, Haris to confirm)
+  export_days: 7               # Frigate exports made through the API are deleted after this (M8)
+  disk_limit_percent: 90       # safe limit on the recording disk: oldest footage is deleted above it (M8, M9)
+  disk_target_percent: 85      # ... until use is back down to this
   # Intel QSV for H.265: these cameras' H.265 trips ffmpeg's own HEVC parser ("Error constructing
   # the frame RPS"), which makes VAAPI decoding crash; QSV decodes it cleanly (docs/findings.md F9).
   # If the cameras are switched to H.264, use preset-intel-qsv-h264 (or preset-vaapi).

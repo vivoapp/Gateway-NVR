@@ -80,3 +80,66 @@ services:
       - "8971:8971"              # authenticated UI and API (LAN only, see firewall)
       - "127.0.0.1:5000:5000"    # unauthenticated internal API: gateway only
     logging: *logging
+
+  # M7: each camera's substream as 60 s MP4 segments for the cloud uploader
+  # (docs/SEGMENT_FORMAT.md). The go2rtc image already has ffmpeg and Python, so no new image.
+  substream:
+    image: ${GO2RTC_IMAGE}:${GO2RTC_VERSION}@${GO2RTC_DIGEST}
+    container_name: substream
+    restart: unless-stopped
+    depends_on:
+      - go2rtc
+    entrypoint: ["python3", "-u", "/opt/vivo/tools/substream_archiver.py"]
+    stop_grace_period: 20s     # lets ffmpeg finish the current segments
+    env_file:
+      - ${VIVO_ETC:-/etc/vivo}/secrets.env
+    environment:
+      TZ: UTC
+    volumes:
+      - type: bind
+        source: ./tools
+        target: /opt/vivo/tools
+        read_only: true
+      - type: bind
+        source: ./services/config.json
+        target: /opt/vivo/services/config.json
+        read_only: true
+      - type: bind
+        source: ${MEDIA_ROOT}/recordings/substream
+        target: /recordings/substream
+        bind:
+          create_host_path: false
+    cpus: 1.0
+    mem_limit: 512m
+    logging: *logging
+
+  # M8 and M9: substream retention, old exports and the safe limit on the recording disk
+  # (docs/m8-storage.md). Deletes main-stream hours through Frigate's API on the compose network.
+  storage:
+    image: ${GO2RTC_IMAGE}:${GO2RTC_VERSION}@${GO2RTC_DIGEST}
+    container_name: storage
+    restart: unless-stopped
+    depends_on:
+      - frigate
+    entrypoint: ["python3", "-u", "/opt/vivo/tools/storage_guard.py"]
+    environment:
+      TZ: UTC
+      FRIGATE_API: http://frigate:5000/api
+      MEDIA_DIR: /media/vivo
+    volumes:
+      - type: bind
+        source: ./tools
+        target: /opt/vivo/tools
+        read_only: true
+      - type: bind
+        source: ./services/config.json
+        target: /opt/vivo/services/config.json
+        read_only: true
+      - type: bind
+        source: ${MEDIA_ROOT}
+        target: /media/vivo
+        bind:
+          create_host_path: false
+    cpus: 0.5
+    mem_limit: 256m
+    logging: *logging

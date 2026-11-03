@@ -1,0 +1,105 @@
+# Lab camera inventory: ten fake cameras served by the lab's fakecam container (tests/lab/README.md).
+# Same shape as cameras.yaml. The streams are looping test clips, not real cameras.
+
+site:
+  record_days: 7
+  substream_days: 3
+  export_days: 7
+  disk_limit_percent: 90
+  disk_target_percent: 85
+  hwaccel: none                # no Intel GPU in the lab: Frigate decodes on the CPU
+  detect:
+    width: 640
+    height: 360
+    fps: 5
+
+cameras:
+  - id: cam01
+    name: LAB-CAM-01
+    host: fakecam
+    port: 8554
+    main_path: /cam01_main
+    sub_path: /cam01_sub
+    credentials: LABCAM
+    audio: aac
+
+  - id: cam02
+    name: LAB-CAM-02
+    host: fakecam
+    port: 8554
+    main_path: /cam02_main
+    sub_path: /cam02_sub
+    credentials: LABCAM
+    audio: aac
+
+  - id: cam03
+    name: LAB-CAM-03
+    host: fakecam
+    port: 8554
+    main_path: /cam03_main
+    sub_path: /cam03_sub
+    credentials: LABCAM
+    audio: aac
+
+  - id: cam04
+    name: LAB-CAM-04
+    host: fakecam
+    port: 8554
+    main_path: /cam04_main
+    sub_path: /cam04_sub
+    credentials: LABCAM
+    audio: aac
+
+  - id: cam05
+    name: LAB-CAM-05
+    host: fakecam
+    port: 8554
+    main_path: /cam05_main
+    sub_path: /cam05_sub
+    credentials: LABCAM
+    audio: aac
+
+  - id: cam06
+    name: LAB-CAM-06
+    host: fakecam
+    port: 8554
+    main_path: /cam06_main
+    sub_path: /cam06_sub
+    credentials: LABCAM
+    audio: aac
+
+  - id: cam07
+    name: LAB-CAM-07
+    host: fakecam
+    port: 8554
+    main_path: /cam07_main
+    sub_path: /cam07_sub
+    credentials: LABCAM
+    audio: aac
+
+  - id: cam08
+    name: LAB-CAM-08
+    host: fakecam
+    port: 8554
+    main_path: /cam08_main
+    sub_path: /cam08_sub
+    credentials: LABCAM
+    audio: aac
+
+  - id: cam09
+    name: LAB-CAM-09
+    host: fakecam
+    port: 8554
+    main_path: /cam09_main
+    sub_path: /cam09_sub
+    credentials: LABCAM
+    audio: aac
+
+  - id: cam10
+    name: LAB-CAM-10
+    host: fakecam
+    port: 8554
+    main_path: /cam10_main
+    sub_path: /cam10_sub
+    credentials: LABCAM
+    audio: aac

@@ -264,7 +264,7 @@ step_disk() {
     run mount "$MEDIA_ROOT"
   fi
   (( DRY_RUN )) || mountpoint -q "$MEDIA_ROOT" || die "$MEDIA_ROOT is not mounted"
-  run mkdir -p "$MEDIA_ROOT/frigate/state" "$MEDIA_ROOT/frigate/media"
+  run mkdir -p "$MEDIA_ROOT/frigate/state" "$MEDIA_ROOT/frigate/media" "$MEDIA_ROOT/recordings/substream"
 
   # --add-disk: more recording space on the same path. The disk joins the recording volume's
   # LVM group and the volume (and its ext4) grows onto that disk only, while mounted. If either
@@ -381,6 +381,7 @@ step_stack() {
   run install -d -m 755 "$INSTALL_DIR"
   run rsync -a --delete --exclude .git --exclude reports "$REPO/" "$INSTALL_DIR/"
   run ln -sf "$INSTALL_DIR/bin/vivo-compose" /usr/local/bin/vivo-compose
+  run ln -sf "$INSTALL_DIR/bin/vivo-disk" /usr/local/bin/vivo-disk
   local mount_unit; mount_unit="$(systemd-escape -p --suffix=mount "$MEDIA_ROOT")"
   sed -e "s#@INSTALL_DIR@#$INSTALL_DIR#g" -e "s#@MEDIA_MOUNT@#$mount_unit#g" \
     "$REPO/gateway/files/vivo-gateway.service" | put_file /etc/systemd/system/vivo-gateway.service 644

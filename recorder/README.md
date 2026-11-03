@@ -4,7 +4,9 @@ Local recording gateway for Vivo CAM: IP cameras (RTSP) → go2rtc → Frigate �
 on an Intel N100/N150 mini-PC running Ubuntu Server 24.04 LTS.
 
 This repository covers Milestone 1 (Gateway foundation): M1 Linux baseline, M2 Frigate,
-M3 RTSP camera ingestion and M5 go2rtc stream integration. Later milestones build on it.
+M3 RTSP camera ingestion and M5 go2rtc stream integration, and Milestone 2 (Recording and
+storage): M6 performance baseline, M7 main stream and substream recording, M8 storage and disk,
+M9 retention. Later milestones build on it.
 
 ## Layout
 
@@ -13,15 +15,20 @@ versions.env          every pinned version (Docker, Frigate, go2rtc), with diges
 cameras.yaml          camera inventory: the only camera file people edit (no secrets)
 site.env.example      per-site settings  -> /etc/vivo/site.env
 secrets.env.example   passwords          -> /etc/vivo/secrets.env (root, 600)
-compose.yaml          go2rtc + Frigate
+compose.yaml          go2rtc + Frigate + substream archiver + storage guard
 bin/vivo-compose      docker compose with versions.env and site.env loaded
+bin/vivo-disk         disk use, safe limit, days stored and SSD health in one command (M8)
 go2rtc/go2rtc.yaml    GENERATED from cameras.yaml
 frigate/config.yml    GENERATED from cameras.yaml (mounted read-only)
+services/config.json  GENERATED from cameras.yaml: cameras and storage policy for the two services
 gateway/setup.sh      M1: blank Ubuntu install -> ready gateway
 gateway/files/        sshd, firewall, Docker and systemd files used by setup.sh
 gateway/sites/        reviewed site.env per known gateway (setup.sh --site)
-tools/                config generator, camera probe, continuity report, PoE control
+tools/                config generator, camera probe, continuity report, PoE control,
+                      substream archiver (M7), storage guard (M8, M9)
 tests/                one acceptance check per module; reports go to reports/
+tests/unit/           unit tests (python3 -m unittest discover -s tests/unit)
+tests/lab/            the stack with ten fake cameras on a workstation (tests/lab/README.md)
 docs/                 one page per module, design decisions, camera table
 ```
 
@@ -94,6 +101,10 @@ sudo gateway/setup.sh --only stack
 | M3 | `sudo tests/m3_soak_report.py --hours 24` | 24-hour run with no unexplained drops |
 | M5 | `node tests/m5_browser.mjs` (workstation) | each stream really plays in Chrome (WebRTC and MSE), with screenshots |
 | M5 | `sudo tests/m5_check.py --live-ok cam01,...` | one camera connection per stream, live view works |
+| M6 | `sudo tests/m6_benchmark.py` | CPU, RAM, disk write, network and temperature at 4, 8 and 10 cameras, 3 rounds |
+| M7 | `sudo tests/m7_check.py --hours 24 --samples 20` | both streams recorded for every camera; random minutes play from the main stream and have their substream segments |
+| M8 | `sudo vivo-disk` | disk use per folder, safe limit, days stored, SSD health (SMART) |
+| M9 | `sudo tests/m9_pressure.py` | at the safe limit the oldest footage goes first while recording carries on |
 
 Every check writes a Markdown report to `reports/`. Reports never contain passwords.
 

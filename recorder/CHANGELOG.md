@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Milestone 2 groundwork, built and tested in the new workstation lab (`tests/lab/`, ten fake cameras),
+  not yet on the reference gateway:
+  - M7: `substream` service (`tools/substream_archiver.py`) saves each camera's substream as 60 s MP4
+    segments in the agreed layout (docs/SEGMENT_FORMAT.md), with `.part` files renamed when complete.
+    Frame times from the arrival clock, so a camera reconnect cannot leave a segment claiming hours
+    (docs/findings.md F11). New `tests/m7_check.py` (names, lengths, gaps, random minutes on both streams).
+  - M8 and M9: `storage` service (`tools/storage_guard.py`): substream retention (3 days), old exports
+    deleted through Frigate's API (7 days), and a safe limit on the recording disk: above 90 % the oldest
+    footage goes first, down to 85 %. New `vivo-disk` command (disk use, days stored, SMART) and
+    `tests/m9_pressure.py` (disk-pressure test).
+  - M6: `tests/m6_benchmark.py` (4, 8 and 10 cameras, 3 rounds).
+  - Storage policy in the `site` section of `cameras.yaml`; `tools/gen_config.py` also writes
+    `services/config.json` for the two services, which run in the pinned go2rtc image (Python and ffmpeg,
+    no new image). PyYAML is now only needed by the tools that read `cameras.yaml`.
+  - `setup.sh`: the disk step makes `recordings/substream`; the stack step installs `vivo-disk`.
+    On an installed gateway: `sudo gateway/setup.sh --only disk,stack`.
+  - Unit tests in `tests/unit/`.
 - Milestone 1 groundwork: setup script (M1), Frigate and go2rtc compose and generated configs (M2, M5),
   camera probe, reconnect and 24 h run tools (M3), acceptance checks and module docs.
 - Pinned: Docker 29.9.1, containerd 2.4.2, Compose 5.6.0, Frigate 0.18.0, go2rtc 1.9.14.

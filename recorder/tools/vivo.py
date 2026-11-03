@@ -3,6 +3,9 @@
 Reads the camera inventory, the site and secret settings, and talks to the
 Frigate and go2rtc APIs on the gateway. Nothing here ever prints a secret:
 use redact() on any text that may contain a camera URL.
+
+PyYAML is only needed to read cameras.yaml; the recorder's own services (substream
+archiver, storage guard) run without it and read services/config.json instead.
 """
 import base64
 import json
@@ -14,8 +17,6 @@ import time
 import urllib.request
 from pathlib import Path
 
-import yaml
-
 ROOT = Path(__file__).resolve().parent.parent
 ETC = Path(os.environ.get("VIVO_ETC", "/etc/vivo"))
 FRIGATE_API = os.environ.get("FRIGATE_API", "http://127.0.0.1:5000/api")
@@ -26,9 +27,11 @@ REPORTS = ROOT / "reports"
 
 def read_env(path: Path) -> dict:
     env = {}
-    if not path.exists():
+    try:
+        text = path.read_text()
+    except OSError:      # missing, or secrets.env (root only) read without sudo, e.g. by the unit tests
         return env
-    for line in path.read_text().splitlines():
+    for line in text.splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -45,6 +48,7 @@ INVENTORY = Path(os.environ.get("VIVO_INVENTORY", ROOT / "cameras.yaml"))
 
 
 def inventory(path: Path | None = None) -> dict:
+    import yaml
     return yaml.safe_load((path or INVENTORY).read_text())
 
 
@@ -52,13 +56,23 @@ def cameras(path: Path | None = None) -> list:
     return inventory(path)["cameras"]
 
 
+SERVICES_CONFIG = Path(os.environ.get("VIVO_SERVICES_CONFIG", ROOT / "services" / "config.json"))
+
+
+def services_config(path: Path | None = None) -> dict:
+    """Camera IDs and storage policy for the recorder's services (generated from cameras.yaml)."""
+    return json.loads((path or SERVICES_CONFIG).read_text())
+
+
 _URL_CRED = re.compile(r"([a-z]+://)[^:/@\s]+:[^@/\s]+@")
 
 
 def redact(text: str) -> str:
+    # Logins inside URLs, and every password value. User names alone are not secret, and short ones
+    # such as "vivo" would blank out ordinary words (the gateway's name showed as ***control-n150).
     text = _URL_CRED.sub(r"\1***:***@", str(text))
     for k, v in SECRETS.items():
-        if v and ("PASSWORD" in k or "USER" in k) and len(v) >= 3:
+        if v and "PASSWORD" in k and len(v) >= 3:
             text = text.replace(v, "***")
     return text
 
@@ -122,12 +136,12 @@ def first_segment_start_after(cam: str, t: float) -> float | None:
     return min(starts) if starts else None
 
 
-def ffprobe(args: list, timeout: float = 30.0) -> str:
-    """Run ffprobe inside the Frigate container (no extra tools on the host)."""
+def ffprobe(args: list, timeout: float = 30.0, container: str = "frigate") -> str:
+    """Run ffprobe inside a recorder container (no extra tools on the host)."""
     if not shutil.which("docker"):
         raise RuntimeError("docker not found")
     script = 'p="$(command -v ffprobe || ls /usr/lib/ffmpeg/*/bin/ffprobe | sort -V | tail -1)"; exec "$p" "$@"'
-    out = subprocess.run(["docker", "exec", "frigate", "sh", "-c", script, "ffprobe", *args],
+    out = subprocess.run(["docker", "exec", container, "sh", "-c", script, "ffprobe", *args],
                          capture_output=True, text=True, timeout=timeout)
     if out.returncode != 0:
         raise RuntimeError(redact(out.stderr.strip()[-400:]))

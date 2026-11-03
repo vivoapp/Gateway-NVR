@@ -159,3 +159,23 @@ recording and detection off; RAM about 3.5 GB of 11.5 GB. From Frigate's per-pro
 M6 candidates: lower the substream to 5 to 10 fps on the cameras (also changes the cloud segments,
 so Vivo decides), record without audio if Vivo does not need it, and identify the busy Frigate
 process. Haris's uploader and agent are planned at about one core and 1 GB, with limits.
+
+## F11: copied segments inherit timestamp jumps when go2rtc reconnects to a camera (lab, Oct 29, 2026)
+
+Found while building the M7 substream archiver in the workstation lab (tests/lab/README.md). When
+go2rtc reconnects to its source while a reader stays connected to go2rtc, the RTP timestamps the
+reader gets restart from a new base (ffmpeg logs `RTP: PT=60: bad cseq`). With stream copy and the
+camera's own timestamps, the 60-second segment written at that moment claimed 14,641 seconds
+(1386 frames, about 55 s of video), in its MP4 header as well as in its name. Frigate's
+`preset-rtsp-generic` avoids the same problem by stamping frames with the arrival clock
+(`-use_wallclock_as_timestamps 1`); its restream preset does not.
+
+- The archiver now uses the arrival clock too. That is only safe without B-frames: the reference
+  cameras' substreams have none (every packet in the Oct 23 samples has pts equal to dts), and the
+  archiver keeps the camera's timestamps and logs a warning if a stream has them.
+- Two smaller effects of starting ffmpeg mid-stream, also fixed: the first segment after a
+  (re)start began with an empty edit as long as the wait for the first keyframe (up to 5 s here),
+  and was named from the connect time instead of its first frame. The archiver now starts the
+  timestamps at the first keyframe and names the segment from its real first frame.
+- Frigate's main-stream recordings read the same restream; whether a camera reconnect leaves one
+  10 s Frigate segment with a wrong length is checked in the M10 reconnect tests.
