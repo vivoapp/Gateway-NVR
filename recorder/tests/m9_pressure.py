@@ -14,7 +14,8 @@ Steps:
    not delete days of real footage); the report says which limit was used.
 3. Run one pass of the storage guard in the `storage` container with that limit.
 4. Check: the deleted hours are the oldest ones, in order; Frigate no longer lists them; use is
-   at or below the target; main stream and substream kept recording through the test with no
+   at or below the target; substream segments deleted before their retention ended are listed
+   in early-deletions.jsonl; main stream and substream kept recording through the test with no
    gap over --max-gap seconds.
 5. Delete the filler file (also when a step fails).
 """
@@ -136,6 +137,20 @@ def main() -> int:
     check("substream: only segments older than the remaining ones were deleted",
           not sub_gone or not sub_left or max(sub_gone) <= min(sub_left) + 3600,
           f"{len(sub_gone)} deleted, oldest left {vivo.utc(min(sub_left)) if sub_left else 'none'}")
+    # Segments younger than substream_days were deleted early: each must be in early-deletions.jsonl.
+    cut = time.time() - policy["substream_days"] * 86400
+    early = sg.read_early_deletions(layout.early_deletions, since=t_clean - 1)
+    early_gone = [(s, f) for s, f in sub0 if f not in sub1 and s >= cut]
+    unlisted = [f.name for s, f in early_gone
+                if not any(r["camera"] == sg.SEGMENT_RE.match(f.name)["cam"]
+                           and sg.parse_iso(r["start"]) <= s <= sg.parse_iso(r["end"]) for r in early)]
+    if early_gone:
+        detail = f"{len(early_gone)} segments deleted early, {len(early)} lines written"
+        detail += f"; not listed: {', '.join(unlisted[:3])}" if unlisted else ""
+    else:
+        detail = "no substream deleted early (the deleted hours had no substream)"
+    check("substream: segments deleted before their retention ended are listed in early-deletions.jsonl",
+          not unlisted, detail)
 
     print(f"recording for {args.settle} s more to check there was no gap")
     time.sleep(args.settle)

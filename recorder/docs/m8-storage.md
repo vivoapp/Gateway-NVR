@@ -12,6 +12,7 @@ recording disk is missing, docs/findings.md F1):
 | `frigate/media/exports/` | clips exported through Frigate's API | Frigate | `export_days` (7) |
 | `frigate/state/` | Frigate database, caches, its own config backups | Frigate | always |
 | `recordings/substream/<camera>/YYYY-MM-DD/` | substream segments for the uploader | `substream` | `substream_days` (3) |
+| `recordings/substream/early-deletions.jsonl` | substream deleted before `substream_days` ended (docs/m9-retention.md) | `storage` | always |
 | `samples/` | sample files for other developers, made by hand | people | until removed |
 
 OS disk:
@@ -35,6 +36,8 @@ database is on it too, and a full disk stops Frigate. The `storage` service
   at a time, down to `disk_target_percent` (85 %): main-stream hours through Frigate's API
   (`DELETE /api/recordings/start/<s>/end/<e>?cameras=all`, which removes the files and the database
   rows together) and substream segments directly. Footage from the last hour is never deleted.
+  Substream deleted this way before its retention ended is listed in
+  `recordings/substream/early-deletions.jsonl` (docs/m9-retention.md).
 - Frigate's own low-space cleanup (it starts when less than about one hour of recording fits)
   stays as a second safety net.
 - Old exports are deleted through Frigate's API (`POST /api/exports/delete`) after `export_days`.

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Early-deletion notice (M9), as offered to Haris on Oct 29, on the reference gateway since Nov 3:
+  the `storage` service lists substream segments deleted before `substream_days` ended (disk above the
+  safe limit) in `recordings/substream/early-deletions.jsonl`, one line per camera and hour, and
+  `tests/m9_pressure.py` checks the list. The matching health alert comes with the health endpoint
+  (M22, Milestone 3). Segment format unchanged (docs/SEGMENT_FORMAT.md).
 - Milestone 2 groundwork, built and tested in the new workstation lab (`tests/lab/`, ten fake cameras),
   not yet on the reference gateway:
   - M7: `substream` service (`tools/substream_archiver.py`) saves each camera's substream as 60 s MP4

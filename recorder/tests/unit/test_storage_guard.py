@@ -2,6 +2,7 @@
 
 usage: python3 -m unittest discover -s tests/unit -v
 """
+import json
 import os
 import sys
 import tempfile
@@ -122,6 +123,61 @@ class GuardTest(unittest.TestCase):
         self.assertFalse(old[0].exists() or old[1].exists())
         self.assertEqual(len(sg.main_hours(self.layout)), 1)              # the newer main hour stays
         self.assertTrue(newest.exists())
+
+    def test_early_substream_deletions_are_listed(self):
+        start = (NOW - 5 * HOUR) // HOUR * HOUR
+        self.main_hour(start, size=5 * MB)
+        for cam in POLICY["cameras"]:
+            for minute in (0, 1, 2):
+                self.sub_segment(cam, start + minute * 60)
+        self.main_hour(NOW // HOUR * HOUR, size=5 * MB)
+        disk = FakeDisk(self.root, total=25 * MB)                          # 20.6 MB used: 82 %
+        with mock.patch.object(sg, "disk_usage", disk.usage), mock.patch.object(sg, "frigate_api", self.fake_api):
+            self.assertEqual(self.guard().relieve_pressure(NOW, limit=80, target=50), 1)
+        recs = sg.read_early_deletions(self.layout.early_deletions)
+        self.assertEqual([r["camera"] for r in recs], ["cam01", "cam02"])  # one line per camera and hour
+        self.assertEqual(recs[0], {"camera": "cam01", "start": sg.iso(start), "end": sg.iso(start + 180),
+                                   "deleted_at": sg.iso(NOW), "segments": 3})
+
+    def test_deletions_after_the_retention_are_not_early(self):
+        old = (NOW - 4 * 86400) // HOUR * HOUR                             # past the 3 days already
+        self.sub_segment("cam01", old, size=10 * MB)
+        self.sub_segment("cam02", NOW - 60, size=10 * MB)
+        disk = FakeDisk(self.root, total=25 * MB)
+        with mock.patch.object(sg, "disk_usage", disk.usage), mock.patch.object(sg, "frigate_api", self.fake_api):
+            self.assertEqual(self.guard().relieve_pressure(NOW, limit=75, target=50), 1)
+        self.assertFalse(self.layout.early_deletions.exists())
+
+    def test_cleanup_carries_on_when_the_list_cannot_be_written(self):
+        start = (NOW - 5 * HOUR) // HOUR * HOUR
+        seg = self.sub_segment("cam01", start, size=10 * MB)
+        self.sub_segment("cam02", NOW - 60, size=10 * MB)
+        self.layout.early_deletions.mkdir()                                # a folder: opening it fails
+        disk = FakeDisk(self.root, total=25 * MB)
+        with mock.patch.object(sg, "disk_usage", disk.usage), mock.patch.object(sg, "frigate_api", self.fake_api):
+            self.assertEqual(self.guard().relieve_pressure(NOW, limit=75, target=50), 1)
+        self.assertFalse(seg.exists())
+
+    def test_dry_run_lists_nothing(self):
+        start = (NOW - 5 * HOUR) // HOUR * HOUR
+        self.sub_segment("cam01", start, size=10 * MB)
+        self.sub_segment("cam02", NOW - 60, size=10 * MB)
+        disk = FakeDisk(self.root, total=25 * MB)
+        with mock.patch.object(sg, "disk_usage", disk.usage), mock.patch.object(sg, "frigate_api", self.fake_api):
+            self.guard(dry_run=True).relieve_pressure(NOW, limit=75, target=50)
+        self.assertFalse(self.layout.early_deletions.exists())
+
+    def test_reading_the_list_skips_bad_lines_and_old_ones(self):
+        self.layout.substream.mkdir(parents=True)
+        good = {"camera": "cam01", "start": sg.iso(NOW - 2 * HOUR), "end": sg.iso(NOW - HOUR),
+                "deleted_at": sg.iso(NOW), "segments": 60}
+        old = dict(good, deleted_at=sg.iso(NOW - 2 * 86400))
+        self.layout.early_deletions.write_text("\n".join([
+            json.dumps(old), "not json", json.dumps({"camera": "cam01"}), "[1, 2]",
+            json.dumps(dict(good, start="yesterday")), json.dumps(good)]) + "\n")
+        self.assertEqual(sg.read_early_deletions(self.layout.early_deletions), [old, good])
+        self.assertEqual(sg.read_early_deletions(self.layout.early_deletions, since=NOW - 86400), [good])
+        self.assertEqual(sg.read_early_deletions(self.root / "missing.jsonl"), [])
 
     def test_folders_that_vanish_are_not_an_error(self):
         missing = self.root / "gone"

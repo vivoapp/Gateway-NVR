@@ -10,7 +10,9 @@ Runs in the `storage` container (the pinned go2rtc image, for its Python), once 
    oldest footage is deleted first, one clock hour at a time, until use is back down to
    `disk_target_percent`. A main-stream hour is deleted through Frigate's API (files and
    database rows together); substream segments are deleted directly. Footage that started
-   within the last hour is never deleted.
+   within the last hour is never deleted. Substream segments deleted this way before their
+   `substream_days` ended are listed in `recordings/substream/early-deletions.jsonl`, one line
+   per camera and hour, so the cloud uploader knows they are gone (docs/m9-retention.md).
 
 Main-stream retention by days is Frigate's own (record.continuous.days in frigate/config.yml).
 The policy comes from services/config.json (generated from the site section of cameras.yaml).
@@ -63,6 +65,47 @@ class Layout:
         self.exports = self.frigate_media / "exports"
         self.state = media / "frigate" / "state"          # Frigate database and caches
         self.substream = media / "recordings" / "substream"
+        self.early_deletions = self.substream / "early-deletions.jsonl"
+
+
+ISO = "%Y-%m-%dT%H:%M:%SZ"
+
+
+def iso(t: float) -> str:
+    return time.strftime(ISO, time.gmtime(t))
+
+
+def parse_iso(s: str) -> int:
+    return calendar.timegm(time.strptime(s, ISO))
+
+
+def early_records(segments: list[tuple[int, Path]], now: float) -> list[dict]:
+    """One early-deletions.jsonl line per camera for substream segments deleted in one pass over an hour."""
+    by_cam: dict[str, list[tuple[int, int]]] = {}
+    for start, f in segments:
+        if m := SEGMENT_RE.match(f.name):
+            by_cam.setdefault(m["cam"], []).append((start, parse_stamp(m["end"])))
+    return [{"camera": cam, "start": iso(min(s for s, _ in spans)), "end": iso(max(e for _, e in spans)),
+             "deleted_at": iso(now), "segments": len(spans)} for cam, spans in sorted(by_cam.items())]
+
+
+def read_early_deletions(path: Path, since: float = 0) -> list[dict]:
+    """early-deletions.jsonl lines deleted at or after `since`, oldest first; lines that do not parse are skipped."""
+    try:
+        lines = path.read_text().splitlines()
+    except (OSError, ValueError):
+        return []
+    out = []
+    for line in lines:
+        try:
+            rec = json.loads(line)
+            deleted = parse_iso(rec["deleted_at"])
+            valid = isinstance(rec["camera"], str) and parse_iso(rec["start"]) <= parse_iso(rec["end"])
+        except (ValueError, KeyError, TypeError):
+            continue
+        if valid and deleted >= since:
+            out.append(rec)
+    return out
 
 
 def disk_usage(path: Path) -> tuple[int, int, float]:
@@ -233,7 +276,8 @@ class Guard:
             freed = 0
             if main and main[0] == hour:
                 freed += self.delete_main_hour(hour)
-            sub_files = [f for s, f in sub if hour <= s < hour + HOUR]
+            sub_hour = [(s, f) for s, f in sub if hour <= s < hour + HOUR]
+            sub_files = [f for _, f in sub_hour]
             if sub_files:
                 freed += size_of(sub_files)
                 self.delete(sub_files)
@@ -243,6 +287,7 @@ class Guard:
             log(f"deleted the hour from {vivo.utc(hour)}: {freed / 1e9:.2f} GB "
                 f"({'main stream' if main and main[0] == hour else ''}{' and ' if main and main[0] == hour and sub_files else ''}"
                 f"{'substream' if sub_files else ''})")
+            self.note_early(sub_hour, now)
             if self.dry_run:
                 used -= freed
                 pct = 100.0 * used / (used + avail + freed_total) if used + avail else 0.0
@@ -252,6 +297,22 @@ class Guard:
                 break
         log(f"recording disk now {pct:.1f}% used after deleting {hours} hours ({freed_total / 1e9:.2f} GB)")
         return hours
+
+    def note_early(self, segments: list[tuple[int, Path]], now: float) -> None:
+        """List substream segments deleted before their retention ended in early-deletions.jsonl."""
+        cutoff = now - self.policy["substream_days"] * 86400
+        records = early_records([(s, f) for s, f in segments if s >= cutoff], now)
+        if not records:
+            return
+        log(f"substream deleted early for {', '.join(r['camera'] for r in records)}: "
+            + ("not listed (dry run)" if self.dry_run else f"listed in {self.layout.early_deletions.name}"))
+        if self.dry_run:
+            return
+        try:   # after the delete on purpose: on a full disk, the deletion frees the space for the line
+            with open(self.layout.early_deletions, "a") as out:
+                out.write("".join(json.dumps(r) + "\n" for r in records))
+        except OSError as e:   # the cleanup must carry on; the storage log above still shows what went
+            log(f"could not write {self.layout.early_deletions.name}: {e}")
 
     def delete_main_hour(self, hour: int) -> int:
         d = main_hour_dir(self.layout, hour)
