@@ -10,6 +10,7 @@ recording disk is missing, docs/findings.md F1):
 |---|---|---|---|
 | `frigate/media/recordings/YYYY-MM-DD/HH/<camera>/MM.SS.mp4` | main stream, 10 s files, UTC | Frigate | `record_days` (7) |
 | `frigate/media/exports/` | clips exported through Frigate's API | Frigate | `export_days` (7) |
+| `frigate/media/clips/previews/<camera>/` | Frigate's low-resolution timeline previews, one file per camera and hour (about 0.9 GB a day at 10 cameras); the other `clips/` folders stay empty with detection off | Frigate | with the main stream, deleted by Frigate |
 | `frigate/state/` | Frigate database, caches, its own config backups | Frigate | always |
 | `recordings/substream/<camera>/YYYY-MM-DD/` | substream segments for the uploader | `substream` | `substream_days` (3) |
 | `recordings/substream/early-deletions.jsonl` | substream deleted before `substream_days` ended (docs/m9-retention.md) | `storage` | always |
