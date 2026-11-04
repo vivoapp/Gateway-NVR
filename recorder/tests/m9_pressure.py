@@ -6,18 +6,20 @@ usage:
   sudo tests/m9_pressure.py --max-filler-gb 20     # the default cap on the filler file (see below)
 
 Steps:
-1. Note the recording disk use and which main-stream hours and substream segments exist.
-2. Write a filler file on the recording disk until use is just above the safe limit from
+1. Wait until `frigate` and `substream` have run for --warmup seconds, so a restart just before
+   the test (the M6 benchmark's, for example) is not counted as a recording gap.
+2. Note the recording disk use and which main-stream hours and substream segments exist.
+3. Write a filler file on the recording disk until use is just above the safe limit from
    cameras.yaml. If that needs more than --max-filler-gb (a nearly empty 1.2 TB disk would need
    about 1 TB of writes), the filler is capped and the test uses a lower limit just under the
    filled level instead, with a target that frees about the two oldest hours (so the test does
    not delete days of real footage); the report says which limit was used.
-3. Run one pass of the storage guard in the `storage` container with that limit.
-4. Check: the deleted hours are the oldest ones, in order; Frigate no longer lists them; use is
+4. Run one pass of the storage guard in the `storage` container with that limit.
+5. Check: the deleted hours are the oldest ones, in order; Frigate no longer lists them; use is
    at or below the target; substream segments deleted before their retention ended are listed
    in early-deletions.jsonl; main stream and substream kept recording through the test with no
    gap over --max-gap seconds.
-5. Delete the filler file (also when a step fails).
+6. Delete the filler file (also when a step fails).
 """
 import argparse
 import os
@@ -35,6 +37,7 @@ import vivo  # noqa: E402
 
 rows: list[tuple[bool, str, str]] = []
 CHUNK = 64 * 1024 * 1024
+RECORDERS = ("frigate", "substream")
 
 
 def check(name: str, ok: bool, detail: str = "") -> bool:
@@ -61,6 +64,20 @@ def fill(path: Path, size: int) -> None:
         os.fsync(f.fileno())
 
 
+def wait_until_settled(warmup: int) -> bool:
+    """Wait until the recorders have run `warmup` seconds; False when one is not running."""
+    out = subprocess.run(["docker", "inspect", "-f", "{{.State.Running}} {{.State.StartedAt}}", *RECORDERS],
+                         capture_output=True, text=True).stdout.split()
+    if out[0::2] != ["true"] * len(RECORDERS):
+        return False
+    started = max(sg.parse_iso(s[:19] + "Z") for s in out[1::2])
+    wait = started + warmup - time.time()
+    if wait > 0:
+        print(f"the recorders started at {vivo.utc(started)[11:19]}; waiting {wait:.0f} s before the test")
+        time.sleep(wait)
+    return True
+
+
 def frigate_rows(cam: str, start: int, end: int) -> int:
     # The cache-busting parameter: Frigate's nginx briefly caches API answers.
     segs = vivo.frigate(f"/{cam}/recordings?after={start}&before={end}&nocache={time.time_ns()}", timeout=30)
@@ -72,7 +89,12 @@ def main() -> int:
     ap.add_argument("--max-filler-gb", type=float, default=20)
     ap.add_argument("--max-gap", type=float, default=10)
     ap.add_argument("--settle", type=int, default=150, help="seconds to keep recording after the cleanup")
+    ap.add_argument("--warmup", type=int, default=180, help="seconds frigate and substream must have run first")
     args = ap.parse_args()
+
+    if not wait_until_settled(args.warmup):
+        print(f"ERROR: {' and '.join(RECORDERS)} must be running", file=sys.stderr)
+        return 2
 
     media = Path(vivo.SITE.get("MEDIA_ROOT", "/srv/vivo"))
     layout = sg.Layout(media)
