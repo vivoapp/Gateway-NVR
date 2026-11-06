@@ -28,6 +28,7 @@ caused it, or a planned window). A gap nothing explains fails the test.
 ```bash
 sudo tests/m10_recovery.py kill --count 10
 sudo tests/m10_recovery.py disconnect --count 5 --off 20
+sudo tests/m10_recovery.py disconnect --block --camera cam02 --count 3 --off 6   # a short network drop
 tests/m10_recovery.py reboot --host vivo-n150 --count 10        # on the workstation
 ```
 
@@ -35,6 +36,10 @@ Each run writes its own report; `report --events FILE --events FILE` combines ev
 gap log. Reboot times are read from the gateway's own clock, so the workstation's clock does not
 matter. The whole run takes about 1.5 hours for the reboots, 20 minutes for the kills and 15 minutes
 for the disconnects. Recording stops during each event: post the planned window first.
+
+`--block` drops the camera's connection in the gateway's firewall instead of its power: the camera
+keeps running and only its stream stops, like a short network drop. After a drop shorter than
+10 s, Frigate's main-stream recorder can take up to about 2 minutes to record again (findings F12).
 
 ## Not included
 

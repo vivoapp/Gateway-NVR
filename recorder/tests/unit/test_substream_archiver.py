@@ -90,6 +90,26 @@ class Mp4Duration(unittest.TestCase):
         self.assertIsNone(sa.mp4_duration(Path(self.tmp.name) / "missing.mp4"))
 
 
+class SaveAndRename(unittest.TestCase):
+    """A segment gets its final name only when it is on the disk and whole (M11 power cuts)."""
+
+    def test_whole_file_is_renamed(self):
+        with tempfile.TemporaryDirectory() as d:
+            part, final = Path(d) / "cam01_x.mp4.part", Path(d) / "cam01_x_y.mp4"
+            part.write_bytes(Mp4Duration.box(b"ftyp", b"isom") + Mp4Duration.box(b"moov", b"\0" * 20)
+                             + Mp4Duration.box(b"mdat", b"x" * 100))
+            self.assertIsNone(sa.save_and_rename(part, final))
+            self.assertTrue(final.exists() and not part.exists())
+
+    def test_broken_file_keeps_its_part_name(self):
+        with tempfile.TemporaryDirectory() as d:
+            part, final = Path(d) / "cam01_x.mp4.part", Path(d) / "cam01_x_y.mp4"
+            part.write_bytes(Mp4Duration.box(b"ftyp", b"isom") + struct.pack(">I4s", 0, b"free")
+                             + Mp4Duration.box(b"mdat", b"x" * 100))     # the index never arrived
+            self.assertIn("no moov", sa.save_and_rename(part, final) or "")
+            self.assertTrue(part.exists() and not final.exists())
+
+
 class SegmentList(unittest.TestCase):
     def test_csv_line(self):
         name, duration = sa.parse_list_line("cam01_20261023T051710Z.mp4.part,12.000000,71.974000\n")

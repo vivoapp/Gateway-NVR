@@ -8,7 +8,9 @@ transcoding, into the layout of docs/SEGMENT_FORMAT.md:
   <ARCHIVE_DIR>/<camera_id>/<YYYY-MM-DD>/<camera_id>_<start>Z_<end>Z.mp4
 
 ffmpeg writes `<camera_id>_<start>Z.mp4.part` and reports each finished segment on its
-segment list; this supervisor then renames the file to the full name. `.part` files that
+segment list; this supervisor then writes the file out to the disk, checks that it is a whole
+MP4 (tools/mp4box.py) and only then renames it to the full name, so a power cut can leave a
+`.part` file but never a broken segment under its final name (M11). `.part` files that
 ffmpeg could not finish (killed, crashed) are deleted, never renamed. Segments are cut at
 the first keyframe after each full minute (UTC). Retention is in tools/storage_guard.py.
 
@@ -29,6 +31,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import mp4box  # noqa: E402
 import vivo  # noqa: E402
 
 ARCHIVE_DIR = Path(os.environ.get("ARCHIVE_DIR", "/recordings/substream"))
@@ -86,6 +89,23 @@ def segment_times(opened: int, duration: float, next_start: int | None, now: flo
         return start, max(start, next_start)
     end = opened + duration if now is None else min(opened + duration, now)
     return opened, max(opened, int(round(end)))
+
+
+def save_and_rename(part: Path, final: Path) -> str | None:
+    """Give a finished segment its final name once its data is on the disk and the file is whole.
+    Returns what is wrong with a file that is not whole; it then keeps its .part name."""
+    with open(part, "rb") as f:
+        os.fsync(f.fileno())
+    problem = mp4box.cut_short(part)
+    if problem:
+        return problem
+    os.rename(part, final)  # same disk (and nearly always the same folder), so the rename is atomic
+    fd = os.open(final.parent, os.O_RDONLY)
+    try:
+        os.fsync(fd)        # the new name is on the disk too
+    finally:
+        os.close(fd)
+    return None
 
 
 def mp4_duration(path: Path) -> float | None:
@@ -296,7 +316,11 @@ class Camera(threading.Thread):
             part.unlink()
             return
         final.parent.mkdir(parents=True, exist_ok=True)
-        os.rename(part, final)  # same disk (and nearly always the same folder), so the rename is atomic
+        problem = save_and_rename(part, final)
+        if problem:
+            log(self.cam, f"{name} is not a whole MP4 ({problem}); deleting it")
+            part.unlink(missing_ok=True)
+            return
         self.done += 1
         self.last_done = time.time()
 

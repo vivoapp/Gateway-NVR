@@ -26,8 +26,11 @@ Found with the power cuts on the reference gateway on Nov 6 (docs/milestone-3-re
   through Frigate's own API; otherwise a clip across one stops there and the HLS playlist lists a
   part that answers 404. Each delete stays 1 s inside the segment and only goes ahead when no healthy
   recording overlaps it.
-- A substream segment finished in those seconds can lose its index too (ffprobe: "moov atom not
-  found"). It is left in place; M12 lists it, and the report of the power test counts it as lost.
+- The substream archiver writes each segment to the disk and checks that it is a whole MP4 before
+  giving it its final name, so a cut leaves at most a `.part` file, which the archiver deletes at
+  start. Before this (Nov 6, 15:45 UTC) a segment finished in the last seconds could keep its final
+  name without its index (ffprobe: "moov atom not found"); M12 lists those, and the report of the
+  power test counts any damaged file as lost.
 
 ## How a missing disk is handled
 

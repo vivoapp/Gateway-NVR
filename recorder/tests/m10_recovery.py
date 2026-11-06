@@ -4,11 +4,14 @@
 usage:
   sudo tests/m10_recovery.py kill --count 10                 # on the gateway
   sudo tests/m10_recovery.py disconnect --count 5            # on the gateway; PoE backend in site.env
+  sudo tests/m10_recovery.py disconnect --block --camera cam02 --count 3 --off 6   # a short network drop
   tests/m10_recovery.py reboot --host vivo-n150 --count 10   # from a workstation (SSH key, sudo on the gateway)
   sudo tests/m10_recovery.py report --events FILE.csv [--events ...]   # gap log for recorded events
 
 kill        kills Frigate's main process (Docker counts it as a crash, as in tests/m2_check.py)
-disconnect  switches one camera's PoE port off and on (tools/poe.py), a different camera each time
+disconnect  switches one camera's PoE port off and on (tools/poe.py), a different camera each time;
+            with --block the camera's address is blocked in the firewall (DOCKER-USER) instead: the
+            camera keeps power and only its connection drops, like a short network drop
 reboot      reboots the gateway; event times come from the gateway's own clock
 
 Every event is written to a CSV at once. The report lists, per event and camera, how long recording
@@ -58,20 +61,29 @@ def run_kills(count: int, pause: float) -> list[dict]:
     return events
 
 
-def run_disconnects(count: int, off: float, pause: float, only: list[str] | None) -> list[dict]:
+def block(cam: dict, on: bool) -> None:
+    """Block (on=False) or unblock the camera's address for the containers (go2rtc)."""
+    rule = ["DOCKER-USER", "-d", cam["host"], "-j", "DROP"]
+    subprocess.run(["iptables", "-D" if on else "-I", *rule], check=on is False, capture_output=True)
+
+
+def run_disconnects(count: int, off: float, pause: float, only: list[str] | None, firewall: bool = False) -> list[dict]:
     import poe
+    switch = block if firewall else poe.set_power
     cams = [c for c in vivo.cameras() if not only or c["id"] in only]
     events, path = [], events_file("disconnect")
     for n in range(1, count + 1):
         cam = cams[(n - 1) % len(cams)]
         t_off = time.time()
-        poe.set_power(cam, on=False)
-        time.sleep(off)
-        t_on = time.time()
-        poe.set_power(cam, on=True)
+        switch(cam, on=False)
+        try:
+            time.sleep(off)
+        finally:                    # the camera always comes back, also if the test is interrupted
+            t_on = time.time()
+            switch(cam, on=True)
         print(f"disconnect {n}/{count}: {cam['id']} off {vivo.utc(t_off)}, on {vivo.utc(t_on)}", flush=True)
         events.append({"kind": "disconnect", "n": n, "camera": cam["id"], "t_event": f"{t_off:.3f}",
-                       "t_restore": f"{t_on:.3f}", "note": f"{off:g} s off, PoE {vivo.SITE.get('POE_BACKEND', 'manual')}"})
+                       "t_restore": f"{t_on:.3f}", "note": f"{off:g} s off, " + ("firewall block" if firewall else f"PoE {vivo.SITE.get('POE_BACKEND', 'manual')}")})
         testlib.write_events(path, events)
         testlib.wait_until(lambda: testlib.recording_after(t_on, [cam["id"]])[cam["id"]]["main"], LIMITS["disconnect"] + 180, 3)
         time.sleep(pause)
@@ -145,6 +157,7 @@ def main() -> int:
     d.add_argument("--off", type=float, default=20)
     d.add_argument("--pause", type=float, default=60)
     d.add_argument("--camera", action="append")
+    d.add_argument("--block", action="store_true", help="block the camera in the firewall instead of its PoE port")
     b = sub.add_parser("reboot")
     b.add_argument("--host", required=True, help="SSH name of the gateway, e.g. vivo-n150")
     b.add_argument("--count", type=int, default=10)
@@ -163,7 +176,7 @@ def main() -> int:
         return 0 if result and result[1] == 0 else 1
     if a.mode == "report":
         return report(testlib.read_events(a.events), a.planned)
-    events = run_kills(a.count, a.pause) if a.mode == "kill" else run_disconnects(a.count, a.off, a.pause, a.camera)
+    events = run_kills(a.count, a.pause) if a.mode == "kill" else run_disconnects(a.count, a.off, a.pause, a.camera, a.block)
     time.sleep(60)   # let the last segments land before the gap log is built
     for e in events:
         e["t_event"] = float(e["t_event"])

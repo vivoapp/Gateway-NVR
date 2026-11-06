@@ -179,3 +179,14 @@ camera's own timestamps, the 60-second segment written at that moment claimed 14
   timestamps at the first keyframe and names the segment from its real first frame.
 - Frigate's main-stream recordings read the same restream; whether a camera reconnect leaves one
   10 s Frigate segment with a wrong length is checked in the M10 reconnect tests.
+
+## F12: a camera drop shorter than 10 s stalls Frigate's recorder for up to 2 minutes (Nov 6, 2026)
+
+Frigate's main-stream recorder reads go2rtc's restream with a 10 s timeout (`preset-rtsp-restream`).
+After a longer drop (a cable pulled for 28 to 63 s, M10) the connection times out, Frigate starts the
+recorder again and recording is back within 16 s. After a shorter drop the connection survives but no
+more segments are written, until Frigate's record watchdog restarts the recorder (at least 120 s, F2):
+blocking one camera for 6 s three times gave 108, 52 and 102 s without main-stream recording; the
+substream (our archiver) lost only the 6 s. The same happened on Nov 2, when a 6 s drop of the
+gateway's network link left a 111 s gap. The health endpoint already raises `recording_gap` for it;
+the planned fix is to restart that camera's recorder from the health service after about 30 s.

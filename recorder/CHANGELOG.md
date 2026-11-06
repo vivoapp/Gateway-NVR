@@ -25,12 +25,17 @@
   - `tools/mp4box.py` checks that an MP4 is whole (its boxes add up to its size). ffprobe cannot see a
     file cut short when its index is at the start, as in Frigate's segments; the M11 corrupted-segment
     test, the M11 power report and M12 use it.
+  - Substream archiver (M7): a segment gets its final name only once it is written to the disk and is a
+    whole MP4, so a power cut can leave a `.part` file but no broken segment under a final name (asked
+    by Haris after the power-cut tests; docs/SEGMENT_FORMAT.md change log).
   - M10: `tests/m10_recovery.py` (reboots from a workstation, Frigate kills, camera disconnects, gap log).
   - M12: `tests/m12_integrity.py` (missing intervals, unplayable segments with their cause, clock check,
     manual spot-check list).
   - `tests/testlib.py`: each gap goes to the latest event that started before it ended (events closer
     together than their limit keep their own gaps); `window_gaps`, `all_gaps` and `parse_result`.
     `tests/m10_recovery.py reboot` and `tests/m11_faults.py power` exit 1 when their report has a failed check.
+    `tests/m10_recovery.py disconnect --block` simulates a short network drop (docs/findings.md F12);
+    `tests/m12_integrity.py --start ... --streams main` scans a fixed period or one stream.
   - `setup.sh`: `/opt/vivo-gateway` is owned by root (the health service runs its files as root); the
     stack step installs the health, disk-watch and cut-cleanup units; the firewall opens 9101 to `LAN_CIDRS`.
   - `tools/vivo.py` no longer fails without root when it cannot read `/etc/vivo/secrets.env`.

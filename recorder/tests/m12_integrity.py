@@ -5,6 +5,7 @@ usage:
   sudo tests/m12_integrity.py                       # last 24 hours, every camera, both streams
   sudo tests/m12_integrity.py --hours 1 --spot 10   # a short scan, with 10 segments for a manual spot-check
   sudo tests/m12_integrity.py --deep                # also read every frame (slower; finds damage inside files)
+  sudo tests/m12_integrity.py --start "2026-11-03 15:17" --streams main   # a fixed 24 hours, main stream only
 
 For each camera and stream over the period it lists:
 - every missing interval (a gap between segments longer than 3 s for the main stream, 2 s for the
@@ -22,6 +23,7 @@ The live segment-age monitor (a camera whose newest segment is too old although 
 healthy) is the recording_gap alert of the health endpoint, tools/health.py (M22).
 """
 import argparse
+import calendar
 import csv
 import random
 import re
@@ -187,21 +189,31 @@ def clock_check(r: testlib.Report, cams: list[str]) -> list[str]:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--hours", type=float, default=24)
+    ap.add_argument("--start", help="start of the period, UTC \"YYYY-MM-DD HH:MM\" (default: --hours before now)")
+    ap.add_argument("--streams", default="main,substream", help="main, substream or both (default)")
     ap.add_argument("--camera", action="append")
     ap.add_argument("--deep", action="store_true")
     ap.add_argument("--spot", type=int, default=10)
     ap.add_argument("--planned", action="append", default=[])
     ap.add_argument("--seed", type=int)
     a = ap.parse_args()
-    before = time.time() - 180
-    after = before - a.hours * 3600
+    if a.start:
+        after = float(calendar.timegm(time.strptime(a.start, "%Y-%m-%d %H:%M")))
+        before = min(after + a.hours * 3600, time.time() - 180)
+    else:
+        before = time.time() - 180
+        after = before - a.hours * 3600
+    streams = [x.strip() for x in a.streams.split(",") if x.strip()]
+    if not streams or set(streams) - {"main", "substream"}:
+        print("--streams takes main, substream or both", file=sys.stderr)
+        return 2
     cams = a.camera or vivo.services_config()["cameras"]
     planned = [testlib.parse_window(w) for w in a.planned]
     r = testlib.Report()
     findings, gap_rows = [], []
     for cam in cams:
         print(f"{cam}: scanning", flush=True)
-        for scan in (scan_main, scan_substream):
+        for scan in [s for name, s in (("main", scan_main), ("substream", scan_substream)) if name in streams]:
             f, gaps = scan(cam, after, before, a.deep)
             findings += f
             stream = f[0]["stream"] if f else ("main" if scan is scan_main else "substream")
@@ -210,7 +222,7 @@ def main() -> int:
                          for g0, g1 in gaps]
     broken = [x for x in findings if x["cause"]]
     for cam in cams:
-        for stream in ("main", "substream"):
+        for stream in streams:
             n = sum(1 for x in findings if x["camera"] == cam and x["stream"] == stream)
             b = sum(1 for x in broken if x["camera"] == cam and x["stream"] == stream)
             missing = sum(g["length"] for g in gap_rows if g["camera"] == cam and g["stream"] == stream and g["cause"] == "missing")
@@ -229,8 +241,9 @@ def main() -> int:
         w.writerows({**x, "start": vivo.utc(x["start"]), "end": vivo.utc(x["end"]), "cause": x["cause"] or "plays"} for x in findings)
 
     md = ["# M12 recording integrity and timeline", "",
-          f"Period {vivo.utc(after)} to {vivo.utc(before)} ({a.hours:g} h), {len(cams)} cameras, "
-          f"{'every frame read (--deep)' if a.deep else 'file headers read'}. Every segment: {csv_path.name}.", ""] + r.markdown()
+          f"Period {vivo.utc(after)} to {vivo.utc(before)} ({(before - after) / 3600:g} h), {len(cams)} cameras, "
+          f"{' and '.join(streams)}, "
+          f"{'every frame read (--deep)' if a.deep else 'file headers and MP4 boxes read'}. Every segment: {csv_path.name}.", ""] + r.markdown()
     md += ["", "## Segments that will not play", ""]
     md += (["| Camera | Stream | Start (UTC) | File | Cause |", "|---|---|---|---|---|"] +
            [f"| {x['camera']} | {x['stream']} | {vivo.utc(x['start'])} | `{x['file']}` | {x['cause']} |" for x in broken]
