@@ -33,8 +33,8 @@ may not have those segments yet, so the `storage` service lists each one:
 
   `start` is the first deleted segment's start and `end` the last one's end (UTC, to the second, as
   in the file names), `deleted_at` when they were deleted, `segments` how many.
-- The health endpoint (M22, Milestone 3) will show the alert `early_deletion` (warning) for that
-  camera for 24 hours.
+- The health endpoint shows the alert `early_deletion` (warning) for that camera for 24 hours
+  (docs/m22-health.md).
 
 Segments deleted after `substream_days`, the normal retention, are not listed.
 

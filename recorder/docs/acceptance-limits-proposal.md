@@ -12,6 +12,9 @@ for the kickoff. Vivo can change any of them; once agreed they go into this file
 | M9 | Local substream retention | 3 days (input from the uploader developer) | Covers a weekend internet outage |
 | M10 | Recording back after a reboot | 180 s from power on | Boot + Docker + first 10 s segment |
 | M10 | Recording back after a Frigate kill | 60 s | Measured about 30 s in the assessment |
+| M10 | Recording back after a camera's power returns | 120 s | Same as M3 |
+| M11 | Footage lost in a power cut | main 25 s, substream 65 s | The segment being written: 10 s plus Frigate's cache; one 60 s substream segment |
+| M11 | Recording back after power returns | 180 s | Same as a reboot (M10) |
 | M12 | Segment timestamps vs UTC | within ±2 s | NTP keeps the gateway under 0.1 s; cameras' own clocks are not used |
 | M22 | Alert shown after the fault | within 60 s | Segment-age check every 10 s with a 30 s threshold |
 | M25 | Final acceptance run | 24 h at 10 cameras | Long enough to catch slow leaks; matches the 24 h runs elsewhere |

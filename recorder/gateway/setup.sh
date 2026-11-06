@@ -12,12 +12,13 @@
 #   kernel     Ubuntu HWE kernel (N150 graphics need it); the first run asks for one reboot
 #   time       UTC system clock, chrony NTP (also serves time to the cameras on LAN_CIDRS)
 #   docker     Docker Engine + Compose at the versions pinned in versions.env
-#   disk       recording disk mounted at MEDIA_ROOT (ext4, by UUID, nofail); --create-lv SIZE
+#   disk       recording disk at MEDIA_ROOT (ext4, by UUID, nofail, short write cache); --create-lv SIZE
 #              makes it a new LVM volume next to the OS instead (no separate disk); --add-disk
 #              /dev/XXX ERASES that disk and grows the LVM recording volume onto it
 #   ssh        SSH by key only, password login off
 #   firewall   deny inbound except LAN/admin networks, including Docker ports
-#   stack      install to /opt/vivo-gateway, systemd unit, pull and start
+#   stack      install to /opt/vivo-gateway (owned by root), systemd units (recorder, health
+#              endpoint, disk watch), pull and start
 #
 # Safe to run again: every step checks what is already done.
 # --format-disk ERASES the given disk; it asks for a typed confirmation unless --yes.
@@ -66,7 +67,7 @@ while (( $# )); do
     --add-disk) ADD_DISK="${2:?}"; shift ;;
     --yes) ASSUME_YES=1 ;;
     --allow-password-lockout) ALLOW_LOCKOUT=1 ;;
-    -h|--help) sed -n '2,25p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,26p' "$0"; exit 0 ;;
     *) die "unknown option $1" ;;
   esac
   shift
@@ -242,7 +243,7 @@ step_disk() {
     uuid="$(awk -v m="$MEDIA_ROOT" '$2==m && $1 ~ /^UUID=/ {sub("UUID=","",$1); print $1}' /etc/fstab)"
     [[ -n "$uuid" ]] || die "no fstab entry for $MEDIA_ROOT; run with --format-disk /dev/XXX (or add one by UUID)"
   fi
-  line="UUID=$uuid $MEDIA_ROOT ext4 defaults,noatime,nofail,x-systemd.device-timeout=15s 0 2"
+  line="UUID=$uuid $MEDIA_ROOT ext4 defaults,noatime,commit=2,nofail,x-systemd.device-timeout=15s 0 2"
   if ! grep -qxF "$line" /etc/fstab; then
     # Replace any older entry for MEDIA_ROOT (e.g. a replaced or re-formatted disk), then add ours.
     printf '    fstab: %s\n' "$line"
@@ -264,6 +265,20 @@ step_disk() {
     run mount "$MEDIA_ROOT"
   fi
   (( DRY_RUN )) || mountpoint -q "$MEDIA_ROOT" || die "$MEDIA_ROOT is not mounted"
+
+  # Power loss (M11): Linux keeps written data in memory for up to 30 s by default, so a power cut
+  # left the newest segments, already moved to the disk by Frigate, as empty files (up to 49 s of
+  # video, Nov 6). Data older than 3 s is now written out every second and the journal commits
+  # every 2 s (commit=2 above), so new footage is safe on the disk within about 6 s.
+  put_file /etc/sysctl.d/90-vivo-recording.conf 644 <<'EOF'
+# Installed by gateway/setup.sh (M11): new footage reaches the disk within seconds, not 30 s.
+vm.dirty_expire_centisecs = 300
+vm.dirty_writeback_centisecs = 100
+EOF
+  run sysctl -q -p /etc/sysctl.d/90-vivo-recording.conf
+  if ! findmnt -no OPTIONS "$MEDIA_ROOT" 2>/dev/null | grep -q 'commit=2'; then
+    run mount -o remount,commit=2 "$MEDIA_ROOT"
+  fi
   run mkdir -p "$MEDIA_ROOT/frigate/state" "$MEDIA_ROOT/frigate/media" "$MEDIA_ROOT/recordings/substream"
 
   # --add-disk: more recording space on the same path. The disk joins the recording volume's
@@ -353,6 +368,7 @@ step_firewall() {
   local c
   for c in ${ADMIN_CIDRS//,/ }; do run ufw allow from "$c" to any port 22 proto tcp comment 'vivo ssh'; done
   for c in ${LAN_CIDRS//,/ }; do run ufw allow from "$c" to any port 123 proto udp comment 'vivo ntp for cameras'; done
+  for c in ${LAN_CIDRS//,/ }; do run ufw allow from "$c" to any port 9101 proto tcp comment 'vivo health (M22)'; done
 
   # Docker-published ports skip ufw's INPUT rules, so they are filtered in DOCKER-USER.
   local rules="" nets
@@ -379,16 +395,22 @@ step_stack() {
   fi
   run python3 "$REPO/tools/gen_config.py" --check
   run install -d -m 755 "$INSTALL_DIR"
-  run rsync -a --delete --exclude .git --exclude reports "$REPO/" "$INSTALL_DIR/"
+  # Owned by root: the health service runs these files as root (M22).
+  run rsync -a --delete --chown=root:root --chmod=go-w --exclude .git --exclude reports "$REPO/" "$INSTALL_DIR/"
   run ln -sf "$INSTALL_DIR/bin/vivo-compose" /usr/local/bin/vivo-compose
   run ln -sf "$INSTALL_DIR/bin/vivo-disk" /usr/local/bin/vivo-disk
   local mount_unit; mount_unit="$(systemd-escape -p --suffix=mount "$MEDIA_ROOT")"
-  sed -e "s#@INSTALL_DIR@#$INSTALL_DIR#g" -e "s#@MEDIA_MOUNT@#$mount_unit#g" \
-    "$REPO/gateway/files/vivo-gateway.service" | put_file /etc/systemd/system/vivo-gateway.service 644
+  local unit
+  for unit in vivo-gateway.service vivo-cut-cleanup.service vivo-health.service vivo-disk-watch.service vivo-disk-watch.timer; do
+    sed -e "s#@INSTALL_DIR@#$INSTALL_DIR#g" -e "s#@MEDIA_MOUNT@#$mount_unit#g" \
+      "$REPO/gateway/files/$unit" | put_file "/etc/systemd/system/$unit" 644
+  done
   run systemctl daemon-reload
-  run systemctl enable vivo-gateway.service
+  run systemctl enable vivo-gateway.service vivo-health.service vivo-disk-watch.timer
   run "$INSTALL_DIR/bin/vivo-compose" pull
   run systemctl restart vivo-gateway.service
+  run systemctl restart vivo-health.service
+  run systemctl start vivo-disk-watch.timer
   (( DRY_RUN )) || "$INSTALL_DIR/bin/vivo-compose" ps
 }
 

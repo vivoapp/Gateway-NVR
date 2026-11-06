@@ -6,7 +6,8 @@ on an Intel N100/N150 mini-PC running Ubuntu Server 24.04 LTS.
 This repository covers Milestone 1 (Gateway foundation): M1 Linux baseline, M2 Frigate,
 M3 RTSP camera ingestion and M5 go2rtc stream integration, and Milestone 2 (Recording and
 storage): M6 performance baseline, M7 main stream and substream recording, M8 storage and disk,
-M9 retention. Later milestones build on it.
+M9 retention, and Milestone 3 (Resilience and monitoring): M10 restart recovery, M11 power and
+disk faults, M12 integrity QA, M22 health telemetry. Later milestones build on it.
 
 ## Layout
 
@@ -18,6 +19,8 @@ secrets.env.example   passwords          -> /etc/vivo/secrets.env (root, 600)
 compose.yaml          go2rtc + Frigate + substream archiver + storage guard
 bin/vivo-compose      docker compose with versions.env and site.env loaded
 bin/vivo-disk         disk use, safe limit, days stored and SSD health in one command (M8)
+bin/vivo-disk-watch   starts the recorder again when the recording disk returns (M11, run by a timer)
+bin/vivo-clean-empty  removes empty segments a power cut left, before the recorder starts (M11)
 go2rtc/go2rtc.yaml    GENERATED from cameras.yaml
 frigate/config.yml    GENERATED from cameras.yaml (mounted read-only)
 services/config.json  GENERATED from cameras.yaml: cameras and storage policy for the two services
@@ -25,7 +28,8 @@ gateway/setup.sh      M1: blank Ubuntu install -> ready gateway
 gateway/files/        sshd, firewall, Docker and systemd files used by setup.sh
 gateway/sites/        reviewed site.env per known gateway (setup.sh --site)
 tools/                config generator, camera probe, continuity report, PoE control,
-                      substream archiver (M7), storage guard (M8, M9)
+                      substream archiver (M7), storage guard (M8, M9), health endpoint (M22),
+                      cleanup of segments a power cut left broken (M11), MP4 check
 tests/                one acceptance check per module; reports go to reports/
 tests/unit/           unit tests (python3 -m unittest discover -s tests/unit)
 tests/lab/            the stack with ten fake cameras on a workstation (tests/lab/README.md)
@@ -105,6 +109,10 @@ sudo gateway/setup.sh --only stack
 | M7 | `sudo tests/m7_check.py --hours 24 --samples 20` | both streams recorded for every camera; random minutes play from the main stream and have their substream segments |
 | M8 | `sudo vivo-disk` | disk use per folder, safe limit, days stored, SSD health (SMART) |
 | M9 | `sudo tests/m9_pressure.py` | at the safe limit the oldest footage goes first while recording carries on |
+| M10 | `sudo tests/m10_recovery.py kill` / `disconnect`, `tests/m10_recovery.py reboot --host GW` (workstation) | recording back on its own after 10 Frigate kills, 5 camera disconnects, 10 reboots; gap log with every gap's cause |
+| M11 | `tests/m11_faults.py power --host GW` (workstation), `sudo tests/m11_faults.py full-disk` / `missing-disk --yes` / `corrupt` | power cuts, full disk, missing disk, a damaged segment: the gateway recovers without a login |
+| M12 | `sudo tests/m12_integrity.py --hours 24 --spot 10` | every missing interval and unplayable segment with its cause; clock check; manual spot-check list |
+| M22 | `sudo tests/m22_check.py` | each health alert triggered on purpose and shown within 60 s |
 
 Every check writes a Markdown report to `reports/`. Reports never contain passwords.
 
@@ -118,3 +126,4 @@ Every check writes a Markdown report to `reports/`. Reports never contain passwo
 | 8555 tcp/udp | go2rtc WebRTC | |
 | 8971 | Frigate UI and API | Frigate login |
 | 5000 | Frigate internal API | 127.0.0.1 only |
+| 9101 | health endpoint, `/health` (JSON) and `/metrics` (Prometheus), M22 | read only, no login |

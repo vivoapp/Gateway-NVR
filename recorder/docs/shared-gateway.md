@@ -17,6 +17,7 @@ reach the recorder over the gateway's LAN address, because separate Docker daemo
 | go2rtc API, MSE and WebRTC live view | `http://192.168.30.200:1984` | go2rtc login |
 | go2rtc RTSP restream | `rtsp://192.168.30.200:8554/<camera>_main` or `_sub` | restream login |
 | Frigate API | `https://192.168.30.200:8971` (Frigate's self-signed certificate until M23) | per-service Frigate user |
+| Health (M22), for the Edge Agent | `http://192.168.30.200:9101/health` (JSON) and `/metrics` (Prometheus), docs/m22-health.md | none, read only |
 | Substream segments | `/srv/vivo/recordings/substream`, written by the `substream` service, kept 3 days (docs/m7-recording.md, m9-retention.md); early deletions listed in `early-deletions.jsonl` there | read-only mount |
 
 `127.0.0.1:5000` (Frigate without login) stays local to the host on purpose.

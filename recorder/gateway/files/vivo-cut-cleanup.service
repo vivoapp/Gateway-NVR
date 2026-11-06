@@ -1,0 +1,12 @@
+# M11: after a power cut, take the recordings it left broken out of Frigate's index
+# (tools/cut_cleanup.py). Pulled in by vivo-gateway.service and run after it, once per boot.
+# Installed by gateway/setup.sh.
+[Unit]
+Description=Vivo: take recordings a power cut left broken out of Frigate's index
+After=vivo-gateway.service
+Requisite=vivo-gateway.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 @INSTALL_DIR@/tools/cut_cleanup.py
+TimeoutStartSec=600

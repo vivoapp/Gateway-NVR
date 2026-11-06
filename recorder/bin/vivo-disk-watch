@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# M11: bring the recorder back when the recording disk returns. Run every 30 s by
+# vivo-disk-watch.timer (installed by gateway/setup.sh).
+#
+# vivo-gateway.service is bound to the disk's mount (BindsTo), so systemd stops the stack when
+# the disk disappears and nothing is written to the OS disk. This script notices the missing disk
+# (it leaves a marker in /run/vivo) and, once the disk's device is back, starts the stack again;
+# systemd mounts the disk on the way. It only restarts a stack that lost its disk (seen missing,
+# or stopped together with the disk's mount), so a planned `systemctl stop vivo-gateway` is never
+# undone. For planned disk work, also create /etc/vivo/maintenance (the script then does nothing)
+# or stop vivo-disk-watch.timer.
+set -euo pipefail
+ETC="${VIVO_ETC:-/etc/vivo}"
+MARK=/run/vivo/disk-missing
+MEDIA_ROOT="$(sed -n 's/^MEDIA_ROOT=//p' "$ETC/site.env" | tail -1)"
+[[ -n "$MEDIA_ROOT" ]] || { echo "MEDIA_ROOT missing in $ETC/site.env" >&2; exit 1; }
+[[ -e "$ETC/maintenance" ]] && exit 0
+log() { logger -t vivo-disk-watch -- "$*"; echo "$*"; }
+mkdir -p /run/vivo
+
+# The stack lost its disk if it stopped within 10 s of the disk's mount (BindsTo), which also catches
+# a glitch shorter than one 30 s run; a planned `systemctl stop` leaves the mount alone.
+stopped_with_disk() {
+  local unit gw mnt
+  unit="$(systemd-escape -p --suffix=mount "$MEDIA_ROOT")"
+  gw="$(systemctl show -p InactiveEnterTimestampMonotonic --value vivo-gateway.service)"
+  mnt="$(systemctl show -p InactiveEnterTimestampMonotonic --value "$unit")"
+  [[ "${gw:-0}" -gt 0 && "${mnt:-0}" -gt 0 ]] && (( ${gw} - ${mnt} < 10000000 && ${mnt} - ${gw} < 10000000 ))
+}
+
+if mountpoint -q "$MEDIA_ROOT"; then
+  if ! systemctl -q is-active vivo-gateway.service && { [[ -e "$MARK" ]] || stopped_with_disk; }; then
+    log "recording disk $MEDIA_ROOT is back$([[ -e "$MARK" ]] && echo " (missing since $(cat "$MARK"))"): starting the recorder"
+    systemctl start vivo-gateway.service && rm -f "$MARK"
+  else
+    rm -f "$MARK"
+  fi
+  exit 0
+fi
+
+if [[ ! -e "$MARK" ]]; then
+  date -u +%FT%TZ > "$MARK"
+  log "recording disk $MEDIA_ROOT is missing; the recorder stays stopped until it returns"
+fi
+# The disk's fstab source (UUID=... for the reference gateway) tells whether its device is back.
+source="$(findmnt -s -n -o SOURCE --mountpoint "$MEDIA_ROOT" || true)"
+case "$source" in
+  UUID=*) device="$(blkid -U "${source#UUID=}" 2>/dev/null || true)" ;;
+  "")     device="" ;;
+  *)      device="$source"; [[ -b "$device" ]] || device="" ;;
+esac
+if [[ -n "$device" ]]; then
+  log "recording disk device $device is present again: mounting $MEDIA_ROOT and starting the recorder"
+  if systemctl start vivo-gateway.service; then rm -f "$MARK"; else log "start failed; trying again in 30 s"; fi
+fi

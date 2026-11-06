@@ -3,10 +3,37 @@
 ## Unreleased
 
 - Early-deletion notice (M9), as offered to Haris on Oct 29, on the reference gateway since Nov 3:
-  the `storage` service lists substream segments deleted before `substream_days` ended (disk above the
-  safe limit) in `recordings/substream/early-deletions.jsonl`, one line per camera and hour, and
-  `tests/m9_pressure.py` checks the list. The matching health alert comes with the health endpoint
-  (M22, Milestone 3). Segment format unchanged (docs/SEGMENT_FORMAT.md).
+  the `storage` service lists substream segments deleted before `substream_days` ended (disk above the safe
+  limit) in `recordings/substream/early-deletions.jsonl`, one line per camera and hour, and the health
+  endpoint shows a tenth alert, `early_deletion` (warning, for 24 hours). `tests/m9_pressure.py` checks the
+  list and `tests/m22_check.py` the alert (simulated). Segment format unchanged (docs/SEGMENT_FORMAT.md).
+- Milestone 3 (Resilience and monitoring: M10, M11, M12, M22), on the reference gateway since Nov 4;
+  results in docs/milestone-3-results.md:
+  - M22: health endpoint `tools/health.py` as the host service `vivo-health` (port 9101, `/health` JSON and
+    `/metrics` Prometheus): cameras, recorder, disk and SMART, containers, gateway, and nine alert conditions
+    with trigger levels (docs/m22-health.md). It includes the M12 segment-age monitor. `tests/m22_check.py`
+    triggers each alert on purpose; `recorder_down` (it stops Frigate) only when named in `--only`.
+  - M11: `vivo-gateway.service` is bound to the recording disk's mount (it stops when the disk goes away);
+    `vivo-disk-watch.timer` starts it again when the disk returns. `tests/m11_faults.py`: power cuts (by
+    hand, with a smart plug, or as immediate reboots without saving with `--crash`), full disk, missing
+    disk, corrupted segment.
+  - M11 power loss, from the cuts on the reference gateway on Nov 6: new footage now reaches the recording
+    disk within about 6 s instead of up to 35 s (data written out after 3 s, journal commit every 2 s; the
+    `setup.sh` disk step); `bin/vivo-clean-empty` removes empty segments a cut left before the recorder
+    starts; `vivo-cut-cleanup.service` (`tools/cut_cleanup.py`) takes segments a cut left broken out of
+    Frigate's index, so clips and playback no longer stop there.
+  - `tools/mp4box.py` checks that an MP4 is whole (its boxes add up to its size). ffprobe cannot see a
+    file cut short when its index is at the start, as in Frigate's segments; the M11 corrupted-segment
+    test, the M11 power report and M12 use it.
+  - M10: `tests/m10_recovery.py` (reboots from a workstation, Frigate kills, camera disconnects, gap log).
+  - M12: `tests/m12_integrity.py` (missing intervals, unplayable segments with their cause, clock check,
+    manual spot-check list).
+  - `tests/testlib.py`: each gap goes to the latest event that started before it ended (events closer
+    together than their limit keep their own gaps); `window_gaps`, `all_gaps` and `parse_result`.
+    `tests/m10_recovery.py reboot` and `tests/m11_faults.py power` exit 1 when their report has a failed check.
+  - `setup.sh`: `/opt/vivo-gateway` is owned by root (the health service runs its files as root); the
+    stack step installs the health, disk-watch and cut-cleanup units; the firewall opens 9101 to `LAN_CIDRS`.
+  - `tools/vivo.py` no longer fails without root when it cannot read `/etc/vivo/secrets.env`.
 - Milestone 2 groundwork, built and tested in the new workstation lab (`tests/lab/`, ten fake cameras),
   not yet on the reference gateway:
   - M7: `substream` service (`tools/substream_archiver.py`) saves each camera's substream as 60 s MP4

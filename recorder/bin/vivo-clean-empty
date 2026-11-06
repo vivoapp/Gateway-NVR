@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# M11: remove empty recording segments left by a power cut. Run by vivo-gateway.service before
+# the stack starts (installed by gateway/setup.sh).
+#
+# A segment written just before a power cut can come back as a 0-byte file: the file was created
+# but Linux had not yet written its data, and nothing can play it. If Frigate's index still lists
+# it, vivo-cut-cleanup.service takes it out once Frigate is up.
+# Only files from before this boot are removed, so a segment being written right now (Docker may
+# already have restarted the containers) is never touched.
+set -euo pipefail
+ETC="${VIVO_ETC:-/etc/vivo}"
+MEDIA_ROOT="$(sed -n 's/^MEDIA_ROOT=//p' "$ETC/site.env" | tail -1)"
+[[ -n "$MEDIA_ROOT" ]] || { echo "MEDIA_ROOT missing in $ETC/site.env" >&2; exit 1; }
+log() { logger -t vivo-clean-empty -- "$*"; echo "$*"; }
+
+boot="$(uptime -s)"
+for dir in "$MEDIA_ROOT/frigate/media/recordings" "$MEDIA_ROOT/recordings/substream"; do
+  [[ -d "$dir" ]] || continue
+  n="$(find "$dir" -type f -name '*.mp4' -size 0 ! -newermt "$boot" -print -delete | wc -l)"
+  (( n == 0 )) || log "removed $n empty segments from before this boot in $dir"
+done

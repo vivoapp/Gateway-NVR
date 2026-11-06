@@ -27,6 +27,8 @@ OS disk:
 
 `gateway/setup.sh` makes the recording-disk folders; `tests/m1_check.sh` checks the mount.
 
+If the recording disk goes away while running, the recorder stops (nothing is written to the OS disk) and starts again on its own when the disk returns (M11, docs/m11-faults.md).
+
 ## Safe limit
 
 Recordings live on their own filesystem, so filling it cannot fill the OS disk, but Frigate's

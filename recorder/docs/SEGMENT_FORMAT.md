@@ -16,7 +16,7 @@ Status: **agreed** on Oct 19, 2026 in the Vivo Gateway/Recorder chat.
 | Segment length | 60 seconds |
 | Finished marker | Each segment is written as `<camera_id>_<start>Z.mp4.part` **in the same folder** and renamed to the full `<camera_id>_<start>Z_<end>Z.mp4` name only when complete, because the end time is known only then. The rename is instant because both names are on the same disk. The uploader only picks up files ending in `.mp4` |
 | Deletion | The gateway deletes segments after the local retention period (M9). The uploader only reads |
-| Early deletion | Segments deleted before the retention period ended, to keep the disk under its safe limit, are listed in `/recordings/substream/early-deletions.jsonl`, one JSON line per camera and hour (`camera`, `start`, `end`, `deleted_at`, `segments`; docs/m9-retention.md); the health endpoint (Milestone 3) will show the `early_deletion` alert |
+| Early deletion | Segments deleted before the retention period ended, to keep the disk under its safe limit, are listed in `/recordings/substream/early-deletions.jsonl`, one JSON line per camera and hour (`camera`, `start`, `end`, `deleted_at`, `segments`; docs/m9-retention.md), and the health endpoint shows the `early_deletion` alert |
 | Local retention | To be set by Haris (preliminary number by Oct 21), once Vivo gives the expected outage length and site upload speed |
 
 ## Details (confirmed by Haris on Oct 19, 2026)
@@ -36,4 +36,4 @@ Status: **agreed** on Oct 19, 2026 in the Vivo Gateway/Recorder chat.
 | 2026-10-19 | Haris confirmed the details (clock, length tolerance, leftover `.part` files, reading safely, media). His uploader ignores `.part` files and handles files deleted by retention | Izzatullokh, Haris |
 | 2026-10-23 | Media: H.265 on the reference cameras (they send H.265, findings F5), video only; same folders, names and rules. Told Haris in the group chat, with sample segments | Izzatullokh |
 | 2026-10-28 | File name carries the end time too: `<camera_id>_<start>Z_<end>Z.mp4`, asked by Haris so the uploader can record each segment's length. `.part` files keep the start-only name until the rename. Samples renamed to the new form | Izzatullokh, Haris |
-| 2026-11-02 | Early deletions listed in `early-deletions.jsonl` in the substream folder (the health alert follows with Milestone 3), as offered to Haris in the group chat on Oct 29. Segment folders, names and rules unchanged | Izzatullokh |
+| 2026-11-02 | Early deletions listed in `early-deletions.jsonl` in the substream folder, with a health alert, as offered to Haris in the group chat on Oct 29. Segment folders, names and rules unchanged | Izzatullokh |

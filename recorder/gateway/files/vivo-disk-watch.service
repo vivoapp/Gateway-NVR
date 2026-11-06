@@ -1,0 +1,7 @@
+# Vivo: bring the recorder back when the recording disk returns (M11). Installed by gateway/setup.sh.
+[Unit]
+Description=Vivo recording disk watch (M11)
+
+[Service]
+Type=oneshot
+ExecStart=@INSTALL_DIR@/bin/vivo-disk-watch

@@ -4,13 +4,20 @@
 [Unit]
 Description=Vivo gateway recorder stack (go2rtc + Frigate)
 Requires=docker.service
+# BindsTo: the stack stops if the recording disk disappears, so nothing is written to the OS disk;
+# vivo-disk-watch.timer starts it again when the disk is back (M11).
+BindsTo=@MEDIA_MOUNT@
 After=docker.service network-online.target @MEDIA_MOUNT@
 Wants=network-online.target
+# After a power cut: recordings it left broken come out of Frigate's index (M11).
+Wants=vivo-cut-cleanup.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=@INSTALL_DIR@
+# Empty segments left by a power cut (M11); a failure here never stops the recorder from starting.
+ExecStartPre=-@INSTALL_DIR@/bin/vivo-clean-empty
 ExecStart=@INSTALL_DIR@/bin/vivo-compose up -d --remove-orphans
 ExecStop=@INSTALL_DIR@/bin/vivo-compose stop
 TimeoutStartSec=600
