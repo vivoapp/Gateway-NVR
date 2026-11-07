@@ -7,6 +7,11 @@ The rule is the one agreed for M20, and it is deliberately narrow:
 * A segment that is uploaded is never a gap, even if the recorder (M9) has since removed the file.
 * A segment that is still waiting and still on the disk is not a gap; it is just waiting.
   It is reported as "waiting" so that nobody mistakes a long queue for a loss.
+* A segment that is NOT uploaded, whose file is still on the disk and that nothing will retry on its
+  own is "stuck": a `conflict` (a different object exists under the key, or the file changed during
+  the upload), a `missing` whose file is back, or a file that failed so many times that the uploader
+  now retries it only once an hour. It is not a gap yet, but it becomes one the moment the recorder
+  deletes the file, so it is reported separately and a person has to look at it.
 
 Only segments the uploader has seen can be reported. A file that was written and removed between two
 scans of the uploader (the uploader was stopped for longer than the recorder keeps files) leaves no
@@ -19,6 +24,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .segment import parse_segment_name
+
+STUCK_PREFIX = "stuck after"            # the uploader writes this at the start of last_error (service.py)
+
+STUCK_REASONS = {
+    "conflict": "a different object exists under this key (or the file changed during the upload); "
+                "nothing retries it",
+    "missing": "it was reported missing earlier and the file is back; nothing retries it",
+    "pending": "it keeps failing and is retried only once an hour",
+}
 
 REASONS = {
     "missing": "the file was removed before the uploader could upload it",
@@ -43,13 +57,16 @@ def unfinished_rows(db_path: str | Path) -> list[sqlite3.Row]:
 
 
 def find_gaps(cfg, rows) -> dict:
-    """Split the not-uploaded segments into gaps (file gone) and waiting (file still there)."""
-    gaps, waiting = [], []
+    """Split the not-uploaded segments into gaps (file gone), stuck and waiting (file still there)."""
+    gaps, waiting, stuck = [], [], []
     for r in rows:
         if r["state"] == "uploaded":
             continue
         if (cfg.watch_dir / r["rel_path"]).exists():
-            waiting.append(r)
+            if is_stuck(r):
+                stuck.append(stuck_entry(cfg, r))
+            else:
+                waiting.append(r)
             continue
         start, end, camera = r["start_utc"], r["end_utc"], r["camera_id"]
         if start is None or camera is None:                 # a state file from the first version
@@ -74,10 +91,30 @@ def find_gaps(cfg, rows) -> dict:
     for rg in ranges:
         rg["start"], rg["end"] = iso(rg["start_utc"]), iso(rg["end_utc"])
         rg["seconds"] = (rg["end_utc"] or 0) - (rg["start_utc"] or 0)
+    stuck.sort(key=lambda g: (g["camera_id"], g["start_utc"] or 0, g["key"]))
     starts = [w["start_utc"] for w in waiting if w["start_utc"]]
     return {"gaps": gaps, "ranges": ranges, "gap_segments": len(gaps),
             "gap_seconds": sum(rg["seconds"] for rg in ranges),
+            "stuck": stuck, "stuck_segments": len(stuck),
             "waiting": len(waiting), "oldest_waiting": iso(min(starts)) if starts else None}
+
+
+def is_stuck(row) -> bool:
+    """Not uploaded, and nothing will try it again soon (or at all)."""
+    if row["state"] in ("conflict", "missing"):
+        return True
+    return row["state"] == "pending" and (row["last_error"] or "").startswith(STUCK_PREFIX)
+
+
+def stuck_entry(cfg, r) -> dict:
+    start, end, camera = r["start_utc"], r["end_utc"], r["camera_id"]
+    if start is None or camera is None:                     # a state file from the first version
+        info = parse_segment_name(Path(r["rel_path"]).name, cfg.nominal_duration)
+        if info:
+            start, end, camera = info.start_utc, info.end_utc, info.camera_id
+    return {"key": r["key"], "camera_id": camera or "?", "start_utc": start, "end_utc": end,
+            "start": iso(start), "state": r["state"],
+            "reason": STUCK_REASONS.get(r["state"], "nothing retries it"), "last_error": r["last_error"]}
 
 
 def format_text(result: dict) -> str:
@@ -98,8 +135,23 @@ def format_text(result: dict) -> str:
             out.append(f"    {g['key']}  [{g['state']}]")
         if len(result["gaps"]) > 50:
             out.append(f"    ... and {len(result['gaps']) - 50} more (use --json for the full list)")
+    elif result["stuck_segments"]:
+        out.append("No gaps yet, but some segments are stuck (see below).")
     else:
         out.append("No gaps: every segment the uploader has seen is uploaded or still on the disk.")
+    if result["stuck_segments"]:
+        out.append(f"STUCK: {result['stuck_segments']} segment(s) are not uploaded, nothing will retry them on "
+                   f"their own, and their files are still on the disk. No video is lost yet, but each one "
+                   f"becomes a gap when the recorder deletes its file. A person has to look at them.")
+        reasons = {}
+        for g in result["stuck"]:
+            reasons[g["reason"]] = reasons.get(g["reason"], 0) + 1
+        for reason, n in reasons.items():
+            out.append(f"  {n}: {reason}")
+        for g in result["stuck"][:20]:
+            out.append(f"    {g['key']}  [{g['state']}]  {g['last_error'] or ''}")
+        if len(result["stuck"]) > 20:
+            out.append(f"    ... and {len(result['stuck']) - 20} more (use --json for the full list)")
     if result["waiting"]:
         out.append(f"{result['waiting']} segment(s) are still waiting to be uploaded (their files are on the disk; "
                    f"oldest {result['oldest_waiting']}). That is a queue, not a gap.")

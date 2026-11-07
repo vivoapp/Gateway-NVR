@@ -34,14 +34,16 @@ def main(argv=None) -> int:
             return 2
         result = gaps.find_gaps(cfg, gaps.unfinished_rows(cfg.state_db))
         print(json.dumps(result, indent=1) if args.json else gaps.format_text(result))
-        return 1 if result["gap_segments"] else 0
+        if result["gap_segments"]:
+            return 1
+        return 3 if result["stuck_segments"] else 0
 
     if args.command == "status":
         from .service import iter_local_files
         from .storage import S3Storage
-        from .store import Store
-        store = Store(cfg.state_db)
-        counts = store.counts()
+        from . import gaps as gap_report
+        from .store import read_counts
+        counts = read_counts(cfg.state_db)          # read-only: never blocks, never changes the state file
         local_files = sum(1 for _ in iter_local_files(cfg))
         remote = "n/a"
         if args.remote or args.brief:
@@ -59,8 +61,12 @@ def main(argv=None) -> int:
                 print(f"local files waiting in {cfg.watch_dir}: {local_files}")
                 if remote != "n/a":
                     print(f"objects in bucket {cfg.bucket}: {remote}")
-                for r in store.unfinished():
+                unfinished = gap_report.unfinished_rows(cfg.state_db) if cfg.state_db.exists() else []
+                unfinished.sort(key=lambda r: (r["start_utc"] or 0, r["key"]))
+                for r in unfinished[:20]:                  # the oldest 20; a long queue is not listed in full
                     print(f"  {r['state']:9} attempts={r['attempts']} {r['key']}  {r['last_error'] or ''}")
+                if len(unfinished) > 20:
+                    print(f"  ... and {len(unfinished) - 20} more not uploaded yet (run `gaps` for what needs attention)")
         except BrokenPipeError:          # e.g. `status | head`
             pass
         return 0

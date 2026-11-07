@@ -23,8 +23,8 @@ bucket and the filled `/etc/vivo/cloud.env`; see "Still to do" at the end.
 ## 2. Automated tests
 
 `./run.sh test` (Docker, with the real MinIO): last run on the PC on 29 October **130 passed, none skipped**.
-The final package has 131 tests (one more: the fake recorder's new file name); run `./run.sh test` once more
-after replacing the folder. Without Docker 128 pass and 3 (the real-MinIO ones) are skipped.
+After step 10 (the code-review fixes, section 7) the package has 156 tests: 153 pass here without Docker and
+3 (the real-MinIO ones) are skipped; run `./run.sh test` once more after replacing the folder and expect 156 passed.
 The test files and what each covers are listed in `README.md`.
 
 ## 3. M19 acceptance run on the PC
@@ -123,7 +123,27 @@ segment first, so the catch-up time does not make the oldest file older; what ha
 `retention >= outage + margin`. The 1-day margin is a choice (outage noticed late, gateway or uploader down at
 the same time), not a measurement. The recorder team's current setting of 3 days fits a 2-day outage.
 
-## 6. Still to do
+## 6. Code review fixes (step 10)
+
+A second developer read the code (31 October) and listed nine findings. Each real one is fixed and has tests
+(`tests/test_step10.py`, `tests/test_gaps.py`); details in `CHANGELOG.md`.
+
+| Finding | Problem | Fix |
+|---|---|---|
+| CR-3 | A conflict whose file was still on the disk showed as "waiting, a queue, not a gap" | New "stuck" group in the gap report (exit code 3) |
+| CR-2 | One index record that cannot be sent blocked all the ones behind it | The next records are still tried; a refused record is given up after 10 tries with one ERROR |
+| CR-1 | State file and memory grew with every segment ever seen | `state_keep_days` (45): old uploaded rows are forgotten at start-up and hourly |
+| CR-4 | The delete guard switched itself off with an empty key prefix | Empty prefix refused at start-up; `delete()` refuses without a prefix |
+| CR-5 | `status` could fail with "database is locked" | `status` opens the state file read-only |
+| CR-6 | A bad file retried every 5 minutes for ever | After 12 failures: one ERROR, then one try an hour |
+| CR-7, CR-8 | `mkdir` per record; two sets without a limit | Fixed |
+| CR-9 | "Oldest first" is per camera with 2 workers | A question for Vivo, no code |
+
+After step 10 the 18 recovery tests were run again with `--quick` (18 of 18 passed, with the new check "nothing stuck"
+after every test). The full 45-minute run of 29 October was made before step 10; run `./test.sh recovery` once more on
+the PC if Vivo wants the full run on the final code.
+
+## 7. Still to do
 
 - **24-hour acceptance run on the gateway** with 10 real cameras and Backblaze B2: checks, rate and CPU for the report.
   Needs: B2 endpoint, bucket and site prefix from Simon; `/etc/vivo/cloud.env` filled and readable by the `haris` user;

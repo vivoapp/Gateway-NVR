@@ -32,6 +32,10 @@ class Config:
     # The uploader never deletes local files. Removing old segments is the recorder's job (M9).
     # Upload limit in megabits per second for all workers together. 0 = no limit.
     upload_limit_mbps: float = 0.0
+    # Uploaded segments older than this many days are forgotten in the state file (their object is in
+    # the bucket; the recorder's own retention is at most 30 days, so the file is long gone). Without
+    # this the state file and the uploader's memory grow with every segment ever seen. 0 = never forget.
+    state_keep_days: float = 45.0
     # How many cameras are uploaded at the same time. Segments of one camera always go in order.
     workers: int = 2
     # Where the index records (one per uploaded segment) are written. See index.py.
@@ -50,7 +54,7 @@ class Config:
 
 SERVICE_KEYS = {"watch_dir", "state_db", "nominal_duration", "scan_interval", "recent_days",
                 "full_scan_interval", "stats_interval", "backoff_initial", "backoff_max", "batch_size",
-                "connect_timeout", "read_timeout", "upload_limit_mbps", "workers"}
+                "connect_timeout", "read_timeout", "upload_limit_mbps", "workers", "state_keep_days"}
 INDEX_KEYS = {"sink", "dir"}
 S3_KEYS = {"endpoint_url", "bucket", "region", "key_prefix", "access_key", "secret_key"}
 
@@ -93,7 +97,7 @@ def load_config(path: str | os.PathLike) -> Config:
         cfg.endpoint_url = os.environ["S3_ENDPOINT_URL"]
     for name in ("nominal_duration", "scan_interval", "recent_days", "full_scan_interval", "stats_interval",
                  "backoff_initial", "backoff_max", "connect_timeout", "read_timeout",
-                 "batch_size", "upload_limit_mbps", "workers"):
+                 "batch_size", "upload_limit_mbps", "workers", "state_keep_days"):
         if name in svc:
             setattr(cfg, name, svc[name])
     cfg.index_sink = idx.get("sink", cfg.index_sink)
@@ -101,8 +105,14 @@ def load_config(path: str | os.PathLike) -> Config:
         cfg.index_dir = p(idx["dir"])
     if not cfg.bucket:
         raise ValueError("no bucket: set s3.bucket in the config file or S3_BUCKET in the environment")
+    if not cfg.key_prefix.strip("/"):
+        raise ValueError("no key prefix: set s3.key_prefix in the config file or S3_KEY_PREFIX in the "
+                         "environment (use the site id). It keeps this site's objects in their own folder "
+                         "and limits what the uploader may delete.")
     if cfg.workers < 1:
         raise ValueError("service.workers must be at least 1")
+    if cfg.state_keep_days < 0:
+        raise ValueError("service.state_keep_days must be 0 (never forget) or a number of days")
     if cfg.upload_limit_mbps < 0:
         raise ValueError("service.upload_limit_mbps must be 0 (no limit) or more")
     return cfg

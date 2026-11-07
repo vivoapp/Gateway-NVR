@@ -106,3 +106,64 @@ def test_command_without_a_state_file_says_so(cfg, tmp_path, capsys):
     conf = str(write_config(tmp_path, cfg))
     assert main(["gaps", "--config", conf]) == 2
     assert "has not run yet" in capsys.readouterr().err
+
+
+# ---- step 10 (CR-3): "stuck" is neither waiting nor a gap -------------------------------------------
+
+def make_conflict(cfg, s3, new_service, n=1):
+    """Upload a segment, then let the recorder rewrite it: the uploader finds a different object under the key."""
+    p = write_segment(cfg, seg_rel("cam01", n), os.urandom(500))
+    step(new_service())
+    p.write_bytes(os.urandom(700))                # same name, other content
+    svc = new_service()
+    step(svc)
+    return p
+
+
+def test_a_conflict_with_its_file_still_on_disk_is_stuck_not_waiting(cfg, s3, new_service):
+    make_conflict(cfg, s3, new_service)
+    r = result(cfg)
+    assert r["gap_segments"] == 0 and r["waiting"] == 0
+    assert r["stuck_segments"] == 1
+    assert r["stuck"][0]["key"] == seg_key("cam01", 1) and r["stuck"][0]["state"] == "conflict"
+    text = gaps.format_text(r)
+    assert "queue, not a gap" not in text and "STUCK: 1 segment" in text
+    assert "No gaps yet" in text                  # it must not read as healthy
+
+
+def test_a_conflict_whose_file_is_gone_is_a_gap(cfg, s3, new_service):
+    p = make_conflict(cfg, s3, new_service)
+    p.unlink()                                    # retention removes it: now the video is really lost
+    r = result(cfg)
+    assert r["gap_segments"] == 1 and r["stuck_segments"] == 0
+    assert r["gaps"][0]["state"] == "conflict"
+
+
+def test_a_pending_segment_marked_stuck_by_the_service_is_reported_stuck(cfg, s3, new_service):
+    write_segment(cfg, seg_rel("cam01", 1), os.urandom(500))
+    svc = new_service()
+    svc.scan_once()
+    svc.store.mark_retry(seg_key("cam01", 1), gaps.STUCK_PREFIX + " 12 attempts: BadDigest", 9e9)
+    r = result(cfg)
+    assert r["stuck_segments"] == 1 and r["waiting"] == 0
+    assert "once an hour" in r["stuck"][0]["reason"]
+
+
+def test_an_ordinary_retry_is_waiting_not_stuck(cfg, s3, new_service):
+    write_segment(cfg, seg_rel("cam01", 1), os.urandom(500))
+    svc = new_service()
+    s3.stop()
+    step(svc)                                     # fails with a connection error, last_error is set
+    r = result(cfg)
+    assert r["waiting"] == 1 and r["stuck_segments"] == 0
+
+
+def test_command_exit_codes_with_a_stuck_segment(cfg, s3, new_service, tmp_path, capsys):
+    conf = str(write_config(tmp_path, cfg))
+    p = make_conflict(cfg, s3, new_service)
+    assert main(["gaps", "--config", conf]) == 3                 # stuck only: not a gap, not healthy
+    assert "STUCK" in capsys.readouterr().out
+    assert main(["gaps", "--config", conf, "--json"]) == 3
+    assert json.loads(capsys.readouterr().out)["stuck_segments"] == 1
+    p.unlink()
+    assert main(["gaps", "--config", conf]) == 1                 # now it is a gap

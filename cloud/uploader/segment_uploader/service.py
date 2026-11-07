@@ -15,6 +15,7 @@ from pathlib import Path
 
 from . import store as st
 from .config import Config
+from .gaps import STUCK_PREFIX
 from .index import IndexSink, build_record, make_sink
 from .segment import parse_segment_name
 from .storage import PAUSING_KINDS, IntegrityError, S3Storage, classify, remote_matches
@@ -22,6 +23,15 @@ from .storage import PAUSING_KINDS, IntegrityError, S3Storage, classify, remote_
 log = logging.getLogger("segment_uploader")
 
 CHUNK = 1024 * 1024
+
+# A file-level error (a damaged copy, a refused file) is retried with growing waits. After this many
+# failures in a row the segment is "stuck": one ERROR is logged and it is retried only once an hour,
+# so a single bad file cannot fill the log (a person has to look at it; `gaps` lists it).
+STUCK_AFTER = 12
+STUCK_RETRY_SECONDS = 3600.0
+# An index record that failed this many times while the records behind it went through is given up.
+INDEX_GIVE_UP_AFTER = 10
+INDEX_PROBE = 3           # records tried after a failed one, to tell a bad record from a sink that is down
 
 
 def hash_file(path: Path) -> tuple[int, str, str, str]:
@@ -109,14 +119,42 @@ class Service:
         self._warned_names: set[str] = set()
         self._pause_until = 0.0         # whole-service pause: storage unreachable, refusing us, or full
         self._outage_streak = 0
+        self._file_failures: dict[str, int] = {}     # key -> file-level failures in a row (see STUCK_AFTER)
+        self._index_bad: dict[str, int] = {}          # key -> times its index record failed while the sink worked
+        self._index_first_fail: dict[str, int] = {}   # key -> emit counter at its first failure
+        self._index_seq = 0                           # counts emit attempts
+        self._index_ok_seq = 0                        # emit counter at the last success
 
     # ---- start-up -------------------------------------------------------------------
     def recover(self) -> None:
         n = self.store.reset_interrupted()
+        self._known = set()
+        self.prune_old()                      # first: a long-running state file shrinks before it is loaded
         self._known = self.store.all_keys()
         self._dir_state = {}
         self._last_full_scan = None            # the first scan after a start looks at everything
         log.info("event=startup recovered_interrupted=%d counts=%s", n, self.store.counts())
+
+    def prune_old(self) -> int:
+        """Forget uploaded segments older than `state_keep_days`. Returns how many were forgotten.
+
+        Without this the state file and `_known` grow with every segment ever seen (about 14,400 a day
+        for 10 cameras) until the container runs out of memory. A forgotten segment is in the bucket;
+        if its file ever came back it would be found there ("already_present") and not uploaded again.
+        """
+        days = self.cfg.state_keep_days
+        if days <= 0:
+            return 0
+        total = 0
+        while True:
+            keys = self.store.prune(self.clock() - days * 86400)
+            self._known.difference_update(keys)
+            total += len(keys)
+            if len(keys) < 5000:
+                break
+        if total:
+            log.info("event=pruned forgotten=%d older_than_days=%g", total, days)
+        return total
 
     # ---- scanning -------------------------------------------------------------------
     def scan_once(self, full: bool | None = None) -> int:
@@ -136,6 +174,9 @@ class Service:
         previous_full_scan = self._last_full_scan
         if full:
             self._last_full_scan = now
+            self._dir_state = {}                  # forget old date folders; recent ones are listed once more
+            if len(self._warned_names) > 10_000:
+                self._warned_names.clear()        # bounded: a name may be warned about again
             rels = (p.relative_to(self.cfg.watch_dir).as_posix() for p in self._iter_files())
         else:
             rels = iter_recent_files(self.cfg, datetime.fromtimestamp(now, timezone.utc),
@@ -282,6 +323,7 @@ class Service:
                 return "skipped"
 
             self.store.mark_uploaded(key, remote.etag, self.clock())
+            self._file_failures.pop(key, None)
             with self._lock:
                 self._outage_streak = 0
                 if action == "uploaded":
@@ -314,6 +356,14 @@ class Service:
                 delay = self._pause_until - now
         else:
             delay = self._backoff(attempts)
+            failures = self._file_failures.get(key, 0) + 1
+            self._file_failures[key] = failures
+            if failures >= STUCK_AFTER:
+                delay = STUCK_RETRY_SECONDS * (0.5 + 0.5 * self.jitter())
+                error = f"{STUCK_PREFIX} {failures} attempts: {error}"
+                if failures == STUCK_AFTER:
+                    log.error("event=segment_stuck key=%s attempts=%d retry_in=%.0fs error=%s",
+                              key, failures, delay, error)
         self.store.mark_retry(key, error, self.clock() + delay)
         log.warning("event=upload_failed key=%s attempts=%d kind=%s retry_in=%.1fs error=%s",
                     key, attempts, kind, delay, error)
@@ -325,19 +375,57 @@ class Service:
 
         A failing sink never blocks uploading: the records stay in the state file and are sent
         later (with a pause, so a broken sink is not retried every 2 seconds).
+
+        A record that can never be emitted must not hold back the records behind it. So after a
+        failure the next few records are still tried. If the sink accepts a record after the failed
+        one had failed, the sink works and that record is the problem; when this has happened
+        `INDEX_GIVE_UP_AFTER` times the record is given up with one ERROR (marked in the state
+        file; the upload itself is fine). If nothing goes through, the sink is down: pause, keep
+        everything, try again later.
         """
         if self.clock() < self._index_pause_until:
             return 0
-        sent = 0
+        sent, failed, ok_after_failure = 0, [], 0
         for row in self.store.unsent_index(limit):
+            key = row["key"]
             try:
-                self.sink.emit(build_record(row, self.cfg.bucket))
+                record = build_record(row, self.cfg.bucket)
+            except Exception as exc:              # a record that cannot even be built never will be
+                self.store.mark_index_skipped(key)
+                log.error("event=index_skipped key=%s reason=cannot_build_record error=%s: %s",
+                          key, type(exc).__name__, exc)
+                continue
+            self._index_seq += 1
+            try:
+                self.sink.emit(record)
             except Exception as exc:
-                self._index_pause_until = self.clock() + max(self.cfg.backoff_initial, 5.0)
-                log.warning("event=index_failed key=%s error=%s: %s", row["key"], type(exc).__name__, exc)
-                break
-            self.store.mark_index_sent(row["key"])
+                failed.append(key)
+                self._index_first_fail.setdefault(key, self._index_seq)
+                log.warning("event=index_failed key=%s error=%s: %s", key, type(exc).__name__, exc)
+                if not sent and len(failed) > INDEX_PROBE:
+                    break                          # the first records all failed: the sink is down
+                continue
+            self.store.mark_index_sent(key)
+            self._index_ok_seq = self._index_seq
+            self._index_first_fail.pop(key, None)
+            self._index_bad.pop(key, None)
             sent += 1
+            if failed:
+                ok_after_failure += 1
+                if ok_after_failure >= INDEX_PROBE:
+                    break                          # enough proof that the sink works
+        if failed and not sent:                    # nothing went through in this round: try later
+            self._index_pause_until = self.clock() + max(self.cfg.backoff_initial, 5.0)
+        for key in failed:
+            if self._index_ok_seq > self._index_first_fail[key]:    # the sink took a record after this one failed
+                n = self._index_bad.get(key, 0) + 1
+                self._index_bad[key] = n
+                if n >= INDEX_GIVE_UP_AFTER:
+                    self.store.mark_index_skipped(key)
+                    self._index_bad.pop(key, None)
+                    self._index_first_fail.pop(key, None)
+                    log.error("event=index_skipped key=%s reason=sink_refuses_this_record tries=%d "
+                              "(the upload is fine; this index record is missing)", key, n)
         return sent
 
     # ---- measurements -----------------------------------------------------------------
@@ -378,10 +466,14 @@ class Service:
         self.recover()
         log.info("event=running watch_dir=%s bucket=%s", self.cfg.watch_dir, self.cfg.bucket)
         next_stats = time.monotonic() + self.cfg.stats_interval
+        next_prune = time.monotonic() + self.cfg.full_scan_interval
         self._last_stats = (time.monotonic(), time.process_time())
         while not stop.is_set():
             try:
                 self.scan_once()
+                if time.monotonic() >= next_prune:
+                    self.prune_old()
+                    next_prune = time.monotonic() + self.cfg.full_scan_interval
                 self.upload_due(should_stop=stop.is_set)
                 self.deliver_index()
                 if self.cfg.stats_interval > 0 and time.monotonic() >= next_stats:

@@ -76,11 +76,17 @@ by digest and the Python packages are pinned.
 
 ### The `status` and `gaps` commands
 
-`status` shows the counts per state, how many local files are waiting, and with `--remote` the objects in the
-bucket. `gaps` is the M20 gap report: **a gap is a segment that was never confirmed uploaded AND whose local file
-no longer exists.** Uploaded segments are never gaps (even after the recorder removed the file); segments still
-waiting with their file present are reported as "waiting", not as lost. Exit code 1 if there is any gap
-(`--json` for the full list).
+`status` shows the counts per state, how many local files are waiting, with `--remote` the objects in the
+bucket, and the oldest 20 segments not uploaded yet. It opens the state file read-only, so it works at any time,
+even during a long scan. `gaps` is the M20 gap report. It sorts every segment that is not confirmed uploaded into three groups:
+
+| Group | What it is | Exit code |
+|---|---|---|
+| **Gap** | never confirmed uploaded AND the local file no longer exists (the video is lost) | 1 |
+| **Stuck** | not uploaded, the file is still there, and nothing will retry it on its own: a `conflict` (a different object exists under the key, or the file changed during the upload), a `missing` whose file is back, or a file that failed 12 times in a row and is now retried once an hour. No video is lost yet, but each becomes a gap when the recorder deletes the file, so a person has to look. | 3 |
+| **Waiting** | not uploaded, file still there, will be retried (a queue after an outage) | 0 |
+
+Uploaded segments are never gaps, even after the recorder removed the file. `--json` gives the full lists.
 
 ## Try it on a PC (Docker Desktop + Git Bash)
 
@@ -124,12 +130,13 @@ on the gateway they are in `/etc/vivo/cloud.env` (template: `deploy/cloud.env.ex
 | `full_scan_interval` | 3600 | A scan of every folder at start-up and then this often (seconds) |
 | `workers` | 2 | Cameras uploaded at the same time; one camera's segments always go in order. `1` = strictly oldest first |
 | `upload_limit_mbps` | 0 | Upload speed limit for all workers together; 0 = no limit |
+| `state_keep_days` | 45 | Uploaded segments older than this are forgotten in the state file (their objects stay in the bucket), so the file and the memory do not grow for ever. Must be longer than the recorder's retention (at most 30 days). 0 = never |
 | `backoff_initial`, `backoff_max` | 2, 300 | Retry delay doubles from the first to the second value (seconds) |
 | `batch_size` | 50 | Segments taken from the queue at a time |
 | `connect_timeout`, `read_timeout` | 5, 60 | Seconds |
 | `stats_interval` | 60 | Seconds between `event=stats` lines (0 = off) |
 | `[index] sink`, `dir` | `jsonl`, next to the state file | Where index records go (`none` = off) |
-| `[s3] endpoint_url`, `bucket`, `region`, `key_prefix`, `access_key`, `secret_key` | | Environment: `S3_ENDPOINT_URL`, `S3_BUCKET`, `S3_REGION`, `S3_KEY_PREFIX`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` |
+| `[s3] endpoint_url`, `bucket`, `region`, `key_prefix`, `access_key`, `secret_key` | | `key_prefix` (the site id) is required and may not be empty. Environment: `S3_ENDPOINT_URL`, `S3_BUCKET`, `S3_REGION`, `S3_KEY_PREFIX`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` |
 
 To use a **second S3 store**, change only `S3_ENDPOINT_URL` (and the keys, bucket if needed). The same image and the
 same config file work (`./test.sh second-check` proves it).
@@ -185,6 +192,9 @@ One line per event, `key=value` style. The ones to know:
 | `conflict`, `missing` | ERROR: a different object under the key / the file vanished before it was uploaded |
 | `startup` (`recovered_interrupted=`) | start-up; how many interrupted uploads were taken up again |
 | `stats` | uploads, bytes, Mbps, `cpu_pct`, `rss_mb`, pending, workers, limit |
+| `segment_stuck` | ERROR: a file failed 12 times in a row; it is now retried once an hour (`gaps` lists it) |
+| `index_skipped` | ERROR: one index record was given up (the sink refused it 10 times while taking others); the upload is fine |
+| `pruned` | old uploaded segments were forgotten in the state file |
 | `ignored_name`, `index_failed`, `loop_error` | a name outside the format / the index sink failed / an unexpected error in the loop |
 
 ## Tests
@@ -209,7 +219,8 @@ more tests run against the real MinIO. A real run is saved in `logs/docker-test-
 | `test_index.py` | Index record contents, sent once, failing sink, default file sink |
 | `test_status_and_config.py` | The `status` command, environment overrides |
 | `test_acceptance.py` | The M19 checker passes a good run and fails on each kind of damage |
-| `test_gaps.py` | M20 gap report: only "never uploaded and file gone" is a gap |
+| `test_gaps.py` | M20 gap report: only "never uploaded and file gone" is a gap; stuck segments are reported separately |
+| `test_step10.py` | Review fixes: index records that cannot be sent, empty key prefix refused, read-only `status`, stuck files, forgetting old state, bounded memory |
 | `test_fault_proxy.py` | The M20 test proxy: intact pass-through (also with a strict signature check), cut line, refused credentials, full, errors |
 | `test_m20.py` | Retention and catch-up calculation; a short end-to-end run of the recovery script |
 | `test_minio_integration.py` | Real MinIO: round trip with matching ETag, wrong `Content-MD5` rejected, duplicate and conflict |
@@ -238,7 +249,7 @@ config.example.toml   settings for a local run without Docker
   and how the index records reach the backend.
 - **Gateway checks:** Docker must start at boot for the restart policy to work after a reboot; recorder files must be readable by "other" (rootless Docker), and `/etc/vivo/cloud.env` must be
   readable by the `haris` user; see `deploy/README.md`.
-- One `PUT` per file (limit 5 GiB), no multipart; objects are not re-checked later; a `conflict` or `missing` segment needs a
+- One `PUT` per file (limit 5 GiB), no multipart; objects are not re-checked later; a `conflict` or `missing` segment (listed by `gaps` as stuck) needs a
   person to decide (there are no alerts besides the log); a segment the recorder removed before the uploader ever saw it
   cannot be reported (the retention recommendation prevents that).
 - `ENGINEERING_NOTE.md` is the note from the technical evaluation and describes the first version.

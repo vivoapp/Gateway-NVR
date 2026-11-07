@@ -601,8 +601,9 @@ def run_test(rig: Rig, t: Test) -> dict:
         for name, ok, detail in chk.rows:
             res["checks"].append((name, ok, detail))
         g = gap_report.find_gaps(rig.cfg, gap_report.unfinished_rows(rig.cfg.state_db))
-        res["checks"].append(("gap report: no segment lost", g["gap_segments"] == 0 and g["waiting"] == 0,
-                              "no gaps, nothing waiting" if g["gap_segments"] == 0 and g["waiting"] == 0
+        clean = g["gap_segments"] == 0 and g["waiting"] == 0 and g["stuck_segments"] == 0
+        res["checks"].append(("gap report: no segment lost, none stuck", clean,
+                              "no gaps, nothing waiting, nothing stuck" if clean
                               else gap_report.format_text(g).replace("\n", " | ")))
         res["segments_total"] = info.get("local_files")
         stats = [e for e in events if e.get("event") == "stats"]

@@ -85,6 +85,6 @@ def test_sink_is_chosen_in_the_config_and_unknown_names_are_rejected(cfg, tmp_pa
         make_sink(cfg)
 
     f = tmp_path / "c.toml"
-    f.write_text('[service]\nwatch_dir = "x"\n[s3]\nbucket = "b"\n[index]\nsink = "none"\ndir = "out"\n')
+    f.write_text('[service]\nwatch_dir = "x"\n[s3]\nbucket = "b"\nkey_prefix = "site-1"\n[index]\nsink = "none"\ndir = "out"\n')
     loaded = load_config(f)
     assert loaded.index_sink == "none" and loaded.index_dir == tmp_path / "out"

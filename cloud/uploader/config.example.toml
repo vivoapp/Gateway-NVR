@@ -15,6 +15,7 @@ scan_interval = 2.0
 # The uploader never deletes local files. Removing old segments is the recorder's job (M9).
 workers = 2                       # cameras uploaded at the same time (one camera's segments go in order)
 upload_limit_mbps = 0             # upload speed limit for all workers together; 0 = no limit
+state_keep_days = 45              # forget uploaded segments older than this (0 = never); keeps the state file small
 backoff_initial = 2.0             # retry delay doubles each time ...
 backoff_max = 300.0               # ... up to this many seconds
 

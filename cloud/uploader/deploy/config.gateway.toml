@@ -40,6 +40,11 @@ workers = 2
 # (about 1.3 Mbps for 10 cameras) the uploader can never catch up after an outage.
 upload_limit_mbps = 0
 
+# Forget uploaded segments older than this many days in the state file (their objects stay in the bucket).
+# Keeps the state file and the uploader's memory from growing for ever. It must be longer than the
+# recorder's retention (at most 30 days). 0 = never forget.
+state_keep_days = 45
+
 # Retry delay after a failure: starts at backoff_initial and doubles up to backoff_max (seconds).
 # After an outage the first retry can come up to backoff_max later, so this is also the longest extra wait
 # before catch-up starts.

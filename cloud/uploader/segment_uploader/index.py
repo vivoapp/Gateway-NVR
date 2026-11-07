@@ -56,12 +56,15 @@ class JsonLinesSink(IndexSink):
     def __init__(self, directory: Path):
         self.dir = Path(directory)
         self._lock = threading.Lock()
+        self._dir_ready = False
 
     def emit(self, record: dict) -> None:
         day = record["start_utc"][:10]
         line = json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n"
         with self._lock:
-            self.dir.mkdir(parents=True, exist_ok=True)
+            if not self._dir_ready:                  # one mkdir, not one per record
+                self.dir.mkdir(parents=True, exist_ok=True)
+                self._dir_ready = True
             with open(self.dir / f"index-{day}.jsonl", "a", encoding="utf-8") as f:
                 f.write(line)
                 f.flush()

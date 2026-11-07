@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS segments (
     first_seen      REAL NOT NULL,
     uploaded_at     REAL,
     local_deleted   INTEGER NOT NULL DEFAULT 0,   -- unused: kept so older state files still open
-    index_sent      INTEGER NOT NULL DEFAULT 0    -- 1 once the index record was handed to the sink
+    index_sent      INTEGER NOT NULL DEFAULT 0    -- 1 once the index record was handed to the sink, 2 = given up (a record that cannot be built)
 );
 CREATE INDEX IF NOT EXISTS idx_segments_due ON segments (state, next_attempt_at);
 """
@@ -36,6 +36,21 @@ CREATE INDEX IF NOT EXISTS idx_segments_due ON segments (state, next_attempt_at)
 # Columns added after the first version. A state file made by an older version gets them on start.
 _ADDED_COLUMNS = {"camera_id": "TEXT", "start_utc": "INTEGER", "end_utc": "INTEGER",
                   "index_sent": "INTEGER NOT NULL DEFAULT 0"}
+
+
+def read_counts(db_path: str | Path) -> dict[str, int]:
+    """Segments per state, read without changing the state file (safe while the service is running).
+
+    A missing state file counts as empty. The read-only connection never takes the write lock, so
+    `status` cannot fail with "database is locked" during a long scan.
+    """
+    if not Path(db_path).exists():
+        return {}
+    db = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=10)
+    try:
+        return {r[0]: r[1] for r in db.execute("SELECT state, COUNT(*) FROM segments GROUP BY state")}
+    finally:
+        db.close()
 
 
 class Store:
@@ -153,6 +168,29 @@ class Store:
 
     def mark_index_sent(self, key: str) -> None:
         self._exec("UPDATE segments SET index_sent=1 WHERE key=?", (key,))
+
+    def prune(self, uploaded_before: float, limit: int = 5000) -> list[str]:
+        """Forget uploaded segments from before `uploaded_before` (epoch seconds). Returns their keys.
+
+        Only rows that are finished are removed: uploaded and their index record handed over (or given
+        up). Anything waiting, stuck or with an index record still to send is kept. Done in slices so
+        the write lock is held briefly; the caller repeats while a full slice comes back.
+        """
+        with self._lock:
+            keys = [r["key"] for r in self._db.execute(
+                "SELECT key FROM segments WHERE state=? AND index_sent!=0 AND uploaded_at<? LIMIT ?",
+                (UPLOADED, uploaded_before, limit))]
+        for i in range(0, len(keys), 500):
+            chunk = keys[i:i + 500]
+            self._exec(f"DELETE FROM segments WHERE key IN ({','.join('?' * len(chunk))})", tuple(chunk))
+        if keys and not self._in_bulk:
+            with self._lock:
+                self._db.commit()
+        return keys
+
+    def mark_index_skipped(self, key: str) -> None:
+        """Give up on one record that can never be emitted, so it does not block the ones behind it."""
+        self._exec("UPDATE segments SET index_sent=2 WHERE key=?", (key,))
 
     def reset_interrupted(self) -> int:
         """After a crash or restart, anything left 'uploading' must be checked again."""

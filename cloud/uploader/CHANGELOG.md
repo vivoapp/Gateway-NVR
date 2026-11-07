@@ -2,6 +2,31 @@
 
 ## Unreleased (M19 and M20 work, built on the technical evaluation uploader)
 
+### Step 10: fixes from the code review
+A second developer read the code and listed nine findings (`Haris_Scope_Status.xlsx`, sheet "Code Review"). All
+real ones are fixed, each with tests (`tests/test_step10.py`, `tests/test_gaps.py`).
+- **CR-3 gap report:** a segment that is not uploaded, whose file is still on the disk and that nothing will
+  retry (a `conflict`, a `missing` whose file is back, or a file stuck after 12 failures) was shown as "waiting ...
+  a queue, not a gap", so the report looked healthy until retention removed the file. It is now a third group,
+  "stuck", with its own text and JSON list; exit code 3 when there are stuck segments and no gaps.
+  `tools/m20_recovery.py` now also requires "nothing stuck" after every test.
+- **CR-2 index delivery:** one index record that cannot be sent no longer blocks all the records behind it. After
+  a failure the next records are still tried; a record the sink refuses 10 times while taking others is given up with
+  one ERROR (`event=index_skipped`, marked `index_sent=2`). A record that cannot be built is skipped at once. A sink
+  that is down still loses nothing and skips nothing.
+- **CR-1 growth:** uploaded segments older than `state_keep_days` (default 45, 0 = never) are forgotten in the state
+  file and in the uploader's memory, at start-up and then hourly. Rows with a waiting index record, and anything not
+  uploaded, are kept. A forgotten segment whose file ever came back is found in the bucket (`already_present`) and
+  not uploaded again.
+- **CR-8:** the set of warned names and the list of date folders are bounded.
+- **CR-4:** an empty `key_prefix` is refused at start-up, and `delete()` refuses everything when no prefix is set.
+- **CR-5:** `status` opens the state file read-only (it can no longer fail with "database is locked" during a long
+  scan) and lists only the oldest 20 waiting segments.
+- **CR-6:** a file that fails 12 times in a row gets one ERROR (`event=segment_stuck`) and is then retried once an
+  hour instead of every 5 minutes. Outage and credential errors do not count.
+- **CR-7:** the index folder is created once, not once per record.
+- Not code: CR-9 (is "oldest first" per camera enough?) is a question for Vivo.
+
 ### Step 9: documentation and final touches
 - `README.md` rewritten: what it does, how it works (with a diagram), the segment file name (start and end), how to
   run it on the gateway and on a PC, every setting, guarantees, error kinds, the index record, the log lines,

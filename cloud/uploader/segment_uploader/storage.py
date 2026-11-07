@@ -175,7 +175,9 @@ class S3Storage:
 
         It refuses any key outside our own prefix, so a bug can never delete someone else's data.
         """
-        if self.prefix and not key.startswith(self.prefix + "/"):
+        if not self.prefix:
+            raise ValueError(f"refusing to delete {key!r}: no key prefix is set, so nothing is known to be ours")
+        if not key.startswith(self.prefix + "/"):
             raise ValueError(f"refusing to delete {key!r}: outside the prefix {self.prefix!r}")
         self.client.delete_object(Bucket=self.bucket, Key=key)
 
