@@ -3,7 +3,7 @@ secrets.env
 site.env
 *.local.yaml
 cameras.lab.yaml
-# Test output (reports are attached to milestone reviews, not committed)
+# Test output on the gateway; the reports a results page cites are copied to docs/test-reports/
 reports/
 __pycache__/
 .DS_Store

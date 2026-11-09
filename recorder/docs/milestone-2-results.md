@@ -1,17 +1,19 @@
 # Milestone 2 results: M6, M7, M8, M9
 
 Status: **done on the reference gateway, Nov 2 to 4, 2026. Every "Done when" item passes; the one
-finding to follow up is the short CPU peak at the top of each hour (M6).**
+finding to follow up is the short CPU peak at the top of each hour (M6). A 15-camera run was added
+on Nov 9 (M6).**
 The lab (Oct 29) is the same stack with ten fake cameras (tests/lab/README.md); its numbers are not
 the gateway's. Each "Result" below comes from the reference gateway's reports in
-`/opt/vivo-gateway/reports`.
+`/opt/vivo-gateway/reports`; copies of them are in
+[test-reports/milestone-2](test-reports/milestone-2/README.md).
 
 ## M6 Multi-camera performance baseline
 
 | Done when (scope) | Result | Evidence |
 |---|---|---|
 | Vivo can rerun the script and get results within a reasonable margin | Done: 3 rounds of 4, 8 and 10 cameras (Nov 3, 02:00 to 03:59 UTC). At 10 cameras the CPU average was 37.4, 44.1 and 44.4 %, RAM 3440 to 3543 MB. Rounds 2 and 3 agree within 0.3 points; round 1 was lower because the cameras sent less data then (4.1 against 5.8 Mbit/s), so CPU follows the cameras' bitrate | m6-benchmark-20261103-035937 |
-| The 10-camera run stays under the CPU and temperature limits agreed before start (CPU average under 60 %, peak under 85 %, under 80 °C) | Pass in the benchmark rounds: CPU average 44.4 % at most, peak 48.0 %, CPU temperature 49 °C at most. About 4 % CPU per camera, so about 15 cameras would reach the 60 % average. Once an hour the CPU is at 100 % for about 10 s (see below) | m6-benchmark-20261103-035937 |
+| The 10-camera run stays under the CPU and temperature limits agreed before start (CPU average under 60 %, peak under 85 %, under 80 °C) | Pass in the benchmark rounds: CPU average 44.4 % at most, peak 48.0 %, CPU temperature 49 °C at most. About 4 % CPU per camera, so about 15 cameras would reach the 60 % average (measured on Nov 9, see "15 cameras" below). Once an hour the CPU is at 100 % for about 10 s (see below) | m6-benchmark-20261103-035937 |
 
 Top of the hour: on each hour Frigate writes one short preview video per camera for its timeline,
 and the CPU is busy while it does. No 10-camera benchmark round crossed an hour, so the CPU was
@@ -21,6 +23,45 @@ written, and about 42 % before and after. The highest 1-minute average was 52.9 
 had a gap from 04:58 to 05:03. The same happened in round 2 with 8 cameras (two 5-second samples at
 95 and 100 % at 03:00:06 and 03:00:11). The peak limit holds outside these seconds; spreading or
 lightening this hourly work is noted for Milestone 3.
+
+### 15 cameras (Nov 9)
+
+Simon asked whether the gateway can record 15 cameras. The site has 10 cameras, so the run added 5
+copies: copy11 to copy15 take the main stream and substream of cam01 to cam05 from go2rtc's own
+restream. go2rtc, Frigate and the substream archiver do the same work for a copy as for a camera;
+only the network input stays at the 10 real cameras (about 0.5 Mbit/s each). The script ran 3
+rounds of 10 and 15 cameras (`sudo tests/m6_benchmark.py --counts 10,15 --copies`, Nov 9, 02:37 to
+03:59 UTC), checked both streams of every camera after each run, then started the normal 10-camera
+stack again and deleted the copies' substream folders. Frigate deletes the copies' main-stream
+files (about 537 MB) with its normal 7-day cleanup.
+
+| Measured | 10 cameras | 15 cameras |
+|---|---|---|
+| CPU average, rounds 1 to 3 | 39.0, 38.6, 39.6 % | 57.2, 54.1, 63.6 % |
+| CPU peak, outside the top of the hour | 49.8 % | 67.3 % |
+| CPU at the top of the hour | no round crossed an hour (85 to 100 % for about 10 s on Nov 3, see above) | 100 % for about 15 s (03:00:05 to 03:00:15), highest 1-minute average 68.0 % |
+| RAM average | 3627 to 3717 MB | 4354 to 4463 MB (of 12 GB) |
+| CPU temperature peak | 53 °C | 60 °C |
+| Recording, both streams, each run's sampled minutes | 10 of 10 cameras, 100 % | 15 of 15 cameras, 99.37 % or more, no gap |
+
+Result: recording at 15 cameras passes. The CPU does not stay under the agreed limits at 15
+cameras: one of the three rounds averaged 63.6 % (limit 60 %), and the hourly preview work takes it
+to 100 % for about 15 s (limit 85 %). Each camera adds about 3.8 % CPU. So 15 cameras is the most
+this gateway records with the current settings, with no room left for the cloud uploader or live
+view (neither ran during the test). CPU follows what the cameras send: the 10-camera averages were
+lower than on Nov 3 (about 39 against 44 %), and round 3, with the most camera data (5.7 against
+5.4 Mbit/s), had the highest CPU.
+Evidence: m6-benchmark-20261109-035857 (.md and the raw samples in .csv).
+
+Where each camera's CPU goes, from Frigate's own stats (`/api/stats`) and `top` at 10 cameras,
+Nov 9 13:30 UTC, in percent of one core: Frigate decoding the substream and checking it for motion
+at 5 frames a second 6.3 (decoder 3.5, frame capture 0.8, motion check 2.0), Frigate writing the
+main stream to disk 2.6, go2rtc 1.6, the substream archiver about 0.5, and the camera's share of
+Frigate's main processes and previews about 3. That is about 14 % of one core, or 3.5 % of the
+gateway's 4 cores, per camera. The video decoding itself runs on the iGPU (7 % busy); the CPU cost
+is in the steps after it. So almost half of each camera's cost is Frigate's motion check, which
+runs even though object detection is off and recording is continuous. Checking 2 instead of 5
+frames a second should lower it; this is not tested yet.
 
 Lab: the script ran a 2- and 4-camera round, wrote the report and the raw samples, logged its
 planned windows and started the normal stack again.

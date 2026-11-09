@@ -1,0 +1,21 @@
+3 round(s) of [4, 8, 10] cameras, 180 s warm-up + 10 min sampling each: about 117 minutes. Cameras beyond N are not recorded during a run.
+round 1: starting 4 cameras
+round 1: sampling 4 cameras for 10 min
+round 1: starting 8 cameras
+round 1: sampling 8 cameras for 10 min
+round 1: starting 10 cameras
+round 1: sampling 10 cameras for 10 min
+round 2: starting 4 cameras
+round 2: sampling 4 cameras for 10 min
+round 2: starting 8 cameras
+round 2: sampling 8 cameras for 10 min
+round 2: starting 10 cameras
+round 2: sampling 10 cameras for 10 min
+round 3: starting 4 cameras
+round 3: sampling 4 cameras for 10 min
+round 3: starting 8 cameras
+round 3: sampling 8 cameras for 10 min
+round 3: starting 10 cameras
+round 3: sampling 10 cameras for 10 min
+starting the normal stack again
+report: /opt/vivo-gateway/reports/m6-benchmark-20261103-035937.md

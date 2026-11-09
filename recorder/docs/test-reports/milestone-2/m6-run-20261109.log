@@ -1,0 +1,21 @@
+2026-11-09 02:37:00 UTC  3 round(s) of [10, 15] cameras, 180 s warm-up + 10 min sampling each: about 78 minutes. Cameras beyond N are not recorded during a run. Above 10 cameras the extra ones are copies of real cameras' streams through go2rtc (no extra camera connections).
+2026-11-09 02:37:00 UTC  round 1: starting 10 cameras
+2026-11-09 02:40:12 UTC  round 1: sampling 10 cameras for 10 min
+2026-11-09 02:50:36 UTC  round 1: recording at 10 cameras: every camera OK
+2026-11-09 02:50:36 UTC  round 1: starting 15 cameras
+2026-11-09 02:53:48 UTC  round 1: sampling 15 cameras for 10 min
+2026-11-09 03:04:07 UTC  round 1: recording at 15 cameras: every camera OK
+2026-11-09 03:04:07 UTC  round 2: starting 10 cameras
+2026-11-09 03:07:22 UTC  round 2: sampling 10 cameras for 10 min
+2026-11-09 03:17:46 UTC  round 2: recording at 10 cameras: every camera OK
+2026-11-09 03:17:46 UTC  round 2: starting 15 cameras
+2026-11-09 03:20:58 UTC  round 2: sampling 15 cameras for 10 min
+2026-11-09 03:31:17 UTC  round 2: recording at 15 cameras: every camera OK
+2026-11-09 03:31:17 UTC  round 3: starting 10 cameras
+2026-11-09 03:34:32 UTC  round 3: sampling 10 cameras for 10 min
+2026-11-09 03:44:56 UTC  round 3: recording at 10 cameras: every camera OK
+2026-11-09 03:44:56 UTC  round 3: starting 15 cameras
+2026-11-09 03:48:08 UTC  round 3: sampling 15 cameras for 10 min
+2026-11-09 03:58:32 UTC  round 3: recording at 15 cameras: every camera OK
+2026-11-09 03:58:32 UTC  starting the normal stack again
+2026-11-09 03:58:57 UTC  report: /opt/vivo-gateway/reports/m6-benchmark-20261109-035857.md

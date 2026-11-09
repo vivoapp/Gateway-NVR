@@ -5,17 +5,28 @@ usage:
   sudo tests/m6_benchmark.py --dry-run            # print the plan, change nothing
   sudo tests/m6_benchmark.py                      # 4, 8, 10 cameras, 3 rounds (about 2 hours)
   sudo tests/m6_benchmark.py --counts 10 --rounds 1 --minutes 5
+  sudo tests/m6_benchmark.py --counts 10,15 --copies   # more cameras than the site has (see below)
 
 For each camera count the stack is started with only the first N cameras of cameras.yaml: each
 records its main stream continuously, and its substream feeds Frigate and the substream archiver,
 as in normal running. After a warm-up the gateway is sampled every 5 s: CPU busy (all cores), RAM
 used, write rate to the recording disk, network input on the camera LAN, CPU package temperature;
-average and peak, plus each container's share. The rounds repeat the whole sequence, so the spread
-between rounds shows how repeatable the numbers are. At the end, and if anything fails, the normal
-stack with every camera is started again.
+average and peak, plus each container's share. Then every camera of the run is checked for
+recording over the sampled minutes: both streams recorded, no gap over 10 s. The rounds repeat
+the whole sequence, so the spread between rounds shows how repeatable the numbers are. At the
+end, and if anything fails, the normal stack with every camera is started again.
 
-Cameras left out of a run are not recorded during it: post the planned window to the group first.
-The windows are added to reports/planned-windows.txt.
+--copies allows counts above the number of cameras in cameras.yaml. The extra cameras (copy11,
+copy12, ...) are copies of the first cameras' two streams, taken from go2rtc's own RTSP restream,
+so go2rtc, Frigate and the substream archiver do the same work for each copy as for a real
+camera. No extra connection goes to the cameras, so the camera network carries only the real
+cameras. After the run the copies' substream folders are deleted; their main-stream files are
+deleted by Frigate after the retention days (Frigate removes recordings of cameras no longer in
+its config). The cloud uploader, if it runs, sees the copies' substream segments during the run.
+
+Each start restarts the recorder, a short gap on every camera, and cameras left out of a run are
+not recorded during it: post the planned window to the group first. The windows are added to
+reports/planned-windows.txt.
 
 Limits agreed before start (docs/acceptance-limits-proposal.md), checked on the 10-camera runs:
 CPU average under 60 %, peak under 85 %, CPU temperature under 80 °C.
@@ -27,7 +38,9 @@ import argparse
 import csv
 import json
 import os
+import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -35,10 +48,75 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
+import continuity  # noqa: E402
+import m7_check  # noqa: E402
 import vivo  # noqa: E402
 
 LIMITS = {"cpu_avg": 60.0, "cpu_peak": 85.0, "temp": 80.0}
 STEP = 5
+MAX_GAP = 10.0            # longest recording gap allowed inside a sampled window, seconds (as M7)
+MIN_RECORDED = 98.0       # share of the checked window each stream must cover, percent (as M7)
+UNWRITTEN = 120           # the newest two minutes may still be in a .part file (as M7)
+MIN_CHECKED = 60          # shortest window worth a recording check, seconds (needs --minutes 3 or more)
+COPY_CREDENTIALS = "FRIGATE_GO2RTC_RTSP"   # go2rtc's restream login, -> FRIGATE_GO2RTC_RTSP_USER/_PASSWORD
+COPY_RE = re.compile(r"^copy\d{2,3}$")
+
+
+def with_copies(cams: list[dict], n: int) -> list[dict]:
+    """The first n cameras; past the end of the list, copies of the real cameras' streams.
+
+    A copy takes its camera's two streams from go2rtc's own RTSP restream on 127.0.0.1:8554, so it
+    costs go2rtc, Frigate and the substream archiver what one more camera costs, without another
+    connection to the camera.
+    """
+    if not cams:
+        raise ValueError("no cameras to copy")
+    if clash := [c["id"] for c in cams if COPY_RE.match(c["id"])]:
+        raise ValueError(f"camera ids {clash} look like benchmark copies; rename them first")
+    out = [dict(c) for c in cams[:n]]
+    for k in range(max(0, n - len(cams))):
+        src = cams[k % len(cams)]
+        out.append({**src, "id": f"copy{len(cams) + k + 1:02d}", "name": f"COPY-OF-{src['name']}",
+                    "host": "127.0.0.1", "port": 8554, "main_path": f"/{src['id']}_main",
+                    "sub_path": f"/{src['id']}_sub", "credentials": COPY_CREDENTIALS,
+                    "notes": f"M6 benchmark copy of {src['id']}, not a camera"})
+    return out
+
+
+def recording_check(cams: list[str], after: float, before: float, root: Path) -> list[dict]:
+    """Per camera over [after, before]: share of the window each stream recorded, longest gap."""
+    span = max(before - after, 1.0)
+    rows = []
+    for cam in cams:
+        try:
+            sub = m7_check.substream(root, cam, after, before)
+            main = continuity.gaps(cam, after, before)
+        except Exception as e:   # one camera's error must not lose the benchmark numbers
+            rows.append({"camera": cam, "error": vivo.redact(str(e))[:120]})
+            continue
+        # Frigate's first and last segments can reach past the window, so its share is capped at 100%.
+        rows.append({"camera": cam,
+                     "main_pct": min(100.0, 100 * main["covered"] / span),
+                     "main_gap": max((b - a for a, b in main["gaps"]), default=0.0),
+                     "sub_pct": min(100.0, 100 * sub["covered"] / span),
+                     "sub_gap": max((b - a for a, b in sub["gaps"]), default=0.0)})
+    return rows
+
+
+def recording_ok(row: dict) -> bool:
+    return ("error" not in row and row["main_pct"] >= MIN_RECORDED and row["sub_pct"] >= MIN_RECORDED
+            and row["main_gap"] <= MAX_GAP and row["sub_gap"] <= MAX_GAP)
+
+
+def remove_copy_folders(root: Path, ids: list[str]) -> list[str]:
+    """Delete the copies' substream folders (only names made by with_copies, only below root)."""
+    removed = []
+    for cam in ids:
+        d = root / cam
+        if COPY_RE.match(cam) and d.is_dir() and d.resolve().parent == root.resolve():
+            shutil.rmtree(d, ignore_errors=True)
+            removed.append(cam)
+    return removed
 
 
 class Reader:
@@ -169,7 +247,7 @@ class Stack:
             shutil.rmtree(d)
         shutil.copytree(self.project, d, ignore=shutil.ignore_patterns(".git", "reports", "__pycache__"))
         inv = yaml.safe_load(inventory.read_text())
-        inv["cameras"] = inv["cameras"][:n]
+        inv["cameras"] = with_copies(inv["cameras"], n)
         (d / "cameras.yaml").write_text(yaml.safe_dump(inv, sort_keys=False))
         subprocess.run([sys.executable, str(d / "tools" / "gen_config.py"), "--inventory", str(d / "cameras.yaml"),
                         "--out", str(d)], check=True, capture_output=True)
@@ -222,6 +300,8 @@ def main() -> int:
     ap.add_argument("--rounds", type=int, default=3)
     ap.add_argument("--warmup", type=int, default=180, help="seconds after each start before sampling")
     ap.add_argument("--minutes", type=float, default=10, help="sampling time per run")
+    ap.add_argument("--copies", action="store_true",
+                    help="allow counts above the cameras in cameras.yaml, filled with copies of their streams")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--project", default=str(vivo.ROOT), help="folder of the running stack (default: this repository)")
     ap.add_argument("--compose-file", action="append", default=[], help="extra compose file, relative to --project (lab)")
@@ -230,14 +310,26 @@ def main() -> int:
 
     counts = [int(x) for x in args.counts.split(",")]
     inventory = vivo.INVENTORY
-    total_cams = len(vivo.cameras(inventory))
-    counts = [n for n in counts if n <= total_cams]
+    real = vivo.cameras(inventory)
+    total_cams = len(real)
+    counts = [n for n in counts if 0 < n <= total_cams or (args.copies and n > 0)]
+    if not counts:
+        print("no camera count to run (counts above the cameras in cameras.yaml need --copies)")
+        return 2
+    with_copies(real, max(counts))   # refuses ids that clash with the copies' names before anything starts
     per_run = args.warmup + args.minutes * 60
+    copies = max(counts) - total_cams
     plan = (f"{args.rounds} round(s) of {counts} cameras, {args.warmup} s warm-up + {args.minutes:g} min sampling each: "
-            f"about {len(counts) * args.rounds * per_run / 60:.0f} minutes. Cameras beyond N are not recorded during a run.")
+            f"about {len(counts) * args.rounds * per_run / 60:.0f} minutes. Cameras beyond N are not recorded during a run."
+            + (f" Above {total_cams} cameras the extra ones are copies of real cameras' streams through go2rtc "
+               "(no extra camera connections)." if copies > 0 else ""))
     print(plan)
     if args.dry_run:
+        for n in counts:
+            ids = [c["id"] for c in with_copies(real, n)]
+            print(f"  {n} cameras: {', '.join(ids)}")
         return 0
+    substream_root = Path(vivo.SITE.get("MEDIA_ROOT", "/srv/vivo")) / "recordings" / "substream"
 
     reader = Reader(args.sampler_container)
     media = Path(vivo.SITE.get("MEDIA_ROOT", "/srv/vivo"))
@@ -246,8 +338,17 @@ def main() -> int:
     stack = Stack(Path(args.project), args.compose_file, vivo.ETC)
     csv_rows: list[dict] = []
     results: list[tuple[int, int, dict]] = []
+    recordings: list[tuple[int, int, float, float, list[dict]]] = []
     windows: list[str] = []
+    removed: list[str] = []
+    stopped = False
+
+    def stop(*_):
+        raise KeyboardInterrupt
+    signal.signal(signal.SIGTERM, stop)   # systemctl stop: end the run, restore the stack, report, like Ctrl-C
+
     work = Path(tempfile.mkdtemp(prefix="vivo-m6-"))
+    w0 = None
     try:
         for rnd in range(1, args.rounds + 1):
             for n in counts:
@@ -256,23 +357,64 @@ def main() -> int:
                 stack.start_subset(n, inventory, work)
                 time.sleep(args.warmup)
                 print(f"round {rnd}: sampling {n} cameras for {args.minutes:g} min")
+                s0 = time.time()
                 results.append((rnd, n, sample(reader, int(args.minutes * 60), device, iface, csv_rows, f"r{rnd}-{n}")))
+                s1 = time.time() - UNWRITTEN
+                if s1 - s0 >= MIN_CHECKED:
+                    time.sleep(15)   # let Frigate list the last finished segments
+                    ids = [c["id"] for c in with_copies(real, n)]
+                    rows = recording_check(ids, s0, s1, substream_root)
+                    recordings.append((rnd, n, s0, s1, rows))
+                    bad = [r["camera"] for r in rows if not recording_ok(r)]
+                    print(f"round {rnd}: recording at {n} cameras: "
+                          + (f"problem on {', '.join(bad)}" if bad else "every camera OK"))
+                else:
+                    print(f"round {rnd}: recording not checked (sampling shorter than {(UNWRITTEN + MIN_CHECKED) // 60} min)")
+                label = f"{n} of {total_cams} cameras" if n <= total_cams else f"{n} cameras ({total_cams} + {n - total_cams} copies)"
                 windows.append(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(w0))}/"
-                               f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} M6 benchmark, {n} of {total_cams} cameras")
+                               f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} M6 benchmark, {label}")
+                w0 = None
+    except KeyboardInterrupt:
+        stopped = True
+        print("stopped: ending the run early")
     finally:
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)   # a second stop must not interrupt the restore
+        if w0 is not None:   # the run that was cut short is a planned window too
+            windows.append(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(w0))}/"
+                           f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} M6 benchmark, stopped early")
         print("starting the normal stack again")
-        stack.restore()
-        shutil.rmtree(work, ignore_errors=True)
-        if windows:
-            vivo.REPORTS.mkdir(exist_ok=True)
-            with open(vivo.REPORTS / "planned-windows.txt", "a") as f:
-                f.write("\n".join(windows) + "\n")
+        try:
+            stack.restore()
+        finally:   # the log and the clean-up happen even when the restore fails (that error still ends the run)
+            shutil.rmtree(work, ignore_errors=True)
+            if copies > 0:
+                time.sleep(10)   # the restarted archiver no longer writes the copies' folders
+                removed = remove_copy_folders(substream_root,
+                                              [c["id"] for c in with_copies(real, max(counts))[total_cams:]])
+            if windows:
+                vivo.REPORTS.mkdir(exist_ok=True)
+                with open(vivo.REPORTS / "planned-windows.txt", "a") as f:
+                    f.write("\n".join(windows) + "\n")
 
     md = ["# M6 multi-camera performance baseline", "",
           f"{time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime())}. {plan}",
           f"Sampled every {STEP} s. Recording disk device: {device or 'all disks'}; camera network: {iface or 'all interfaces'}."
-          + (f" Read inside container `{args.sampler_container}` (lab, not the gateway)." if args.sampler_container else ""),
-          "", "| Round | Cameras | CPU avg | CPU peak | RAM avg | RAM peak | Disk write avg | Network in avg | Temp avg | Temp peak |",
+          + (f" Read inside container `{args.sampler_container}` (lab, not the gateway)." if args.sampler_container else "")]
+    if copies > 0:
+        extra = with_copies(real, max(counts))[total_cams:]
+        pairs = ", ".join(f"{x['id']} of {x['main_path'].strip('/').rsplit('_', 1)[0]}" for x in extra)
+        md += ["", f"Above {total_cams} cameras the extra cameras are copies: {pairs}. "
+               "Each copy takes its camera's main stream and substream from go2rtc's own RTSP restream, so go2rtc, "
+               "Frigate (recording the main stream, decoding the substream) and the substream archiver do the same "
+               "work for it as for a real camera. No extra connection goes to the cameras, so the network input "
+               f"shows only the {total_cams} real cameras. "
+               + (f"After the run the copies' substream folders were deleted ({', '.join(removed)}); "
+                  if removed else "")
+               + "Frigate deletes the copies' main-stream files after the retention days."]
+    if stopped:
+        md += ["", f"**Stopped early** (systemctl stop or Ctrl-C) after {len(results)} of {len(counts) * args.rounds} runs; "
+               "the normal stack was started again. The numbers below are the runs that finished."]
+    md += ["", "| Round | Cameras | CPU avg | CPU peak | RAM avg | RAM peak | Disk write avg | Network in avg | Temp avg | Temp peak |",
           "|---|---|---|---|---|---|---|---|---|---|"]
     for rnd, n, s in results:
         md.append(f"| {rnd} | {n} | {fmt(s['cpu'][0], ' %')} | {fmt(s['cpu'][1], ' %')} | {fmt(s['ram'][0], ' MB', 0)} | "
@@ -282,6 +424,8 @@ def main() -> int:
            "|---|---|---|---|"]
     for n in counts:
         rs = [s for _, c, s in results if c == n]
+        if not rs:   # a run stopped early may not have reached this count
+            continue
         lo_hi = lambda k, d=1: f"{min(s[k][0] for s in rs):.{d}f} to {max(s[k][0] for s in rs):.{d}f}"  # noqa: E731
         md.append(f"| {n} | {lo_hi('cpu')} % | {lo_hi('ram', 0)} MB | {lo_hi('write', 2)} MB/s |")
     md += ["", "## CPU by container (average of the samples, percent of one core)", ""]
@@ -312,6 +456,32 @@ def main() -> int:
                 verdict.append(f"- Each camera adds about {per_cam:.1f} % CPU (from {min(counts)} to {max(counts)} cameras), "
                                f"so about {fit:.0f} cameras would reach the {LIMITS['cpu_avg']:g} % average limit with "
                                "this load (the cloud uploader and health service are not included).")
+    md += ["", "## Recording during the sampled minutes (both streams, every camera of the run)", "",
+           f"Each run's sampled minutes, without the last {UNWRITTEN // 60} (still being written). A camera passes with "
+           f"{MIN_RECORDED:g} % or more of the window recorded on both streams and no gap over {MAX_GAP:g} s.", "",
+           "| Round | Cameras | Window (UTC) | Cameras OK | Lowest main stream | Lowest substream | Longest gap | Problems |",
+           "|---|---|---|---|---|---|---|---|"]
+    for rnd, n, s0, s1, rows in recordings:
+        good = [r for r in rows if "error" not in r]
+        low_main = min(good, key=lambda r: r["main_pct"], default=None)
+        low_sub = min(good, key=lambda r: r["sub_pct"], default=None)
+        gap = max(good, key=lambda r: max(r["main_gap"], r["sub_gap"]), default=None)
+        problems = [r["camera"] + (f" ({r['error']})" if "error" in r else "") for r in rows if not recording_ok(r)]
+        md.append(f"| {rnd} | {n} | {vivo.utc(s0)[11:19]} to {vivo.utc(s1)[11:19]} | "
+                  f"{sum(recording_ok(r) for r in rows)} of {len(rows)} | "
+                  + (f"{low_main['main_pct']:.2f} % ({low_main['camera']})" if low_main else "n/a") + " | "
+                  + (f"{low_sub['sub_pct']:.2f} % ({low_sub['camera']})" if low_sub else "n/a") + " | "
+                  + (f"{max(gap['main_gap'], gap['sub_gap']):.1f} s ({gap['camera']})" if gap else "n/a") + " | "
+                  + (", ".join(problems) or "none") + " |")
+    if not recordings:
+        md.append(f"| all | | not checked: sampling shorter than {(UNWRITTEN + MIN_CHECKED) // 60} min | | | | | |")
+    top_rec = [r for _, n, _, _, rows in recordings if n == max(counts) for r in rows]
+    if top_rec:
+        all_ok = all(recording_ok(r) for r in top_rec)
+        verdict.append(f"- Recording at {max(counts)} cameras: every camera recorded both streams, {MIN_RECORDED:g} % or "
+                       f"more of each sampled window, no gap over {MAX_GAP:g} s: **{'PASS' if all_ok else 'FAIL'}**")
+    else:
+        verdict.append(f"- Recording at {max(counts)} cameras: not checked")
     md += ["", "## Against the limits", ""] + (verdict or ["- no run at the highest camera count"])
     md += ["", "Raw samples: the .csv file with the same name."]
     path = vivo.write_report("m6-benchmark", "\n".join(md) + "\n")

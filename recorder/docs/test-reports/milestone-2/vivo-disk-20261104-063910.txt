@@ -1,0 +1,14 @@
+Recording disk /srv/vivo (/dev/mapper/ubuntu--vg-vivo--media, ext4), 2026-11-04 06:39:12 UTC
+  19.3% used: 252.4 GB of 1,306.1 GB, 1,053.7 GB free
+  safe limit 90%: above it the oldest footage is deleted down to 85%
+    main stream (Frigate)            219.3 GB
+    substream segments                24.6 GB
+    exports (Frigate)                  0.0 GB
+    Frigate database and state         0.3 GB
+  main stream: 7.03 days stored (oldest 2026-10-28 06:00:00 UTC), kept 7 days
+  substream:   3.0 days stored (oldest 2026-11-01 06:39:00 UTC), kept 3 days; exports kept 7 days
+  at the rate so far (39.4 GB a day), about 29.6 days of footage fit under the safe limit
+OS disk / (/dev/mapper/ubuntu--vg-ubuntu--lv): 18.6% used, 81.2 GB free
+SSD health (SMART):
+  /dev/sda SSD 512GB: PASSED, 40 °C, 366 h on, wear leveling 100, reallocated 0, pending 0
+  /dev/nvme0n1 KINGSTON SNV3S1000G: PASSED, 40 °C, 284 h on, 0% worn, 0 media errors
