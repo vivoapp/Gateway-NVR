@@ -2,7 +2,7 @@
 
 Status: **done on the reference gateway, Nov 2 to 4, 2026. Every "Done when" item passes; the one
 finding to follow up is the short CPU peak at the top of each hour (M6). A 15-camera run was added
-on Nov 9 (M6).**
+on Nov 9 (M6). Vivo checked the results independently on Nov 9 and 10 (see the end of this page).**
 The lab (Oct 29) is the same stack with ten fake cameras (tests/lab/README.md); its numbers are not
 the gateway's. Each "Result" below comes from the reference gateway's reports in
 `/opt/vivo-gateway/reports`; copies of them are in
@@ -128,3 +128,19 @@ disk the oldest hours are 7 days old and have no substream left, so the pressure
 deleted early; the unit tests cover the listing.
 
 Agreed before start: local substream retention 3 days (proposal, Haris to confirm).
+
+## Vivo's independent verification (Nov 9 and 10)
+
+Jorge (Vivo) ran the acceptance checks on the gateway himself, from a computer on the site
+network, with the commands in "Acceptance checks" in recorder/README.md.
+
+| Check | Result | Evidence |
+|---|---|---|
+| 24-hour recording, both streams, 10 cameras (Nov 9 13:13 to Nov 10 13:13 UTC) | Pass, 41 of 41: the substream recorded 100.00 % on every camera, the main stream 99.55 to 99.73 % (see "Main-stream percentage" under M7), no gap on either stream; 20 of 20 random minutes play from the main stream and have their substream segments | m7-check-20261110-132657 |
+| 1-hour recording check (Nov 9 13:55 to 14:55 UTC) | Pass, 41 of 41, 10 of 10 random minutes | m7-check-20261109-145823 |
+| Disk-pressure test (Nov 9 14:46 UTC) | Pass, 8 of 8: the two oldest hours (Nov 2 14:00 and 15:00, 2.89 GB) went first, in order, with no gap on either stream | m9-pressure-20261109-144909 |
+| Storage, `sudo vivo-disk` (Nov 9) | About 27.6 days fit under the 90 % limit. The estimate follows the footage actually stored: 42.8 GB a day on Nov 9 against 38.7 GB on Nov 3, as the cameras sent about 10 % more data that week | `sudo vivo-disk` |
+
+The 24-hour window starts after the 15-camera run and includes the disk-pressure test and the
+1-hour check. Vivo's conclusion (Nov 10): every check passed, no acceptance-blocking defect, and
+Vivo is comfortable closing Milestone 2.
