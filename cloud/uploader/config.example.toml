@@ -1,0 +1,34 @@
+# Copy to config.toml and adjust. Relative paths are relative to this file.
+
+[service]
+watch_dir = "recordings"          # the recorder writes finished segments here
+state_db = "state/state.db"       # SQLite file with the status of every segment
+# Only finished segments are uploaded:
+#   <watch_dir>/<camera_id>/<YYYY-MM-DD>/<camera_id>_<start>Z_<end>Z.mp4     (UTC, YYYYMMDDTHHMMSS; the older name without
+#   the end time is also accepted). The recorder writes <name>.mp4.part and renames it when the segment is complete.
+# Defaults for settings not listed here: stats_interval 60, batch_size 50, connect_timeout 5, read_timeout 60.
+# See deploy/config.gateway.toml for every setting explained.
+nominal_duration = 60             # segment end = start + this, until the file name carries the end time
+recent_days = 2                   # normal scans look at the date folders of the last N days (UTC)
+full_scan_interval = 3600         # a scan of every folder at start-up and then this often (seconds)
+scan_interval = 2.0
+# The uploader never deletes local files. Removing old segments is the recorder's job (M9).
+workers = 2                       # cameras uploaded at the same time (one camera's segments go in order)
+upload_limit_mbps = 0             # upload speed limit for all workers together; 0 = no limit
+state_keep_days = 45              # forget uploaded segments older than this (0 = never); keeps the state file small
+backoff_initial = 2.0             # retry delay doubles each time ...
+backoff_max = 300.0               # ... up to this many seconds
+
+[index]
+sink = "jsonl"                    # "jsonl" = one JSON line per uploaded segment, "none" = off
+dir = "index"                     # default: an "index" folder next to the state file
+
+[s3]
+endpoint_url = "http://localhost:9000"   # MinIO from docker-compose.yml; remove for AWS S3
+bucket = "vivo-segments"
+region = "us-east-1"
+key_prefix = "site-001"
+# Credentials: prefer the S3_ACCESS_KEY and S3_SECRET_KEY environment variables.
+# These are the local MinIO defaults from docker-compose.yml, for the demo only.
+access_key = "minioadmin"
+secret_key = "minioadmin"

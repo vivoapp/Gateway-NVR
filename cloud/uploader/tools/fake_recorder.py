@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+"""Simulates cameras recording video segments, for demos and tests.
+
+Same layout and names as the gateway recorder:
+
+    <dir>/<camera_id>/<YYYY-MM-DD>/<camera_id>_<YYYYMMDDTHHMMSS>Z.mp4     (UTC start time)
+
+Like the real recorder it writes each segment as `<name>.mp4.part` and renames it to `.mp4` when
+finished, so the uploader never sees half-written files. With `--end-in-name` the finished file carries the
+end time too (`<camera_id>_<start>Z_<end>Z.mp4`, the name the M7 archiver will use).
+
+    python tools/fake_recorder.py --dir recordings --cameras 2 --interval 3 --size-mb 2
+"""
+import argparse
+import os
+import time
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--dir", default="recordings")
+    ap.add_argument("--cameras", type=int, default=2)
+    ap.add_argument("--interval", type=float, default=3.0, help="seconds between segments")
+    ap.add_argument("--name-format", default="cam{:02d}",
+                    help='camera id pattern, e.g. "VIVO-CAM-{:02d}" for the real names')
+    ap.add_argument("--size-mb", type=float, default=2.0)
+    ap.add_argument("--end-in-name", action="store_true",
+                    help="name finished files <camera>_<start>Z_<end>Z.mp4, like the real recorder (M7); "
+                         ".part files keep the short name <camera>_<start>Z.mp4.part")
+    ap.add_argument("--segment-seconds", type=float, default=60.0,
+                    help="with --end-in-name: length of a segment, used for the end time in the name")
+    ap.add_argument("--count", type=int, default=0, help="segments per camera (0 = run forever)")
+    ap.add_argument("--start-hours-ago", type=float, default=0,
+                    help="simulate a clock that starts this many hours ago (for compressed long runs)")
+    ap.add_argument("--time-step", type=float, default=0,
+                    help="with --start-hours-ago: simulated seconds that pass per round (60 = one segment per minute)")
+    ap.add_argument("--retain-minutes", type=float, default=0,
+                    help="delete own segments older than this, like the recorder's retention (0 = keep all)")
+    args = ap.parse_args()
+
+    root = Path(args.dir)
+    n = 0
+    try:
+        while args.count == 0 or n < args.count:
+            n += 1
+            if args.start_hours_ago and args.time_step:
+                now = (datetime.now(timezone.utc) - timedelta(hours=args.start_hours_ago)
+                       + timedelta(seconds=args.time_step * (n - 1)))
+            else:
+                now = datetime.now(timezone.utc)
+            for cam in range(1, args.cameras + 1):
+                camera_id = args.name_format.format(cam)
+                cam_dir = root / camera_id / now.strftime("%Y-%m-%d")
+                cam_dir.mkdir(parents=True, exist_ok=True)
+                stamp = now.strftime('%Y%m%dT%H%M%S')
+                end = (now + timedelta(seconds=args.segment_seconds)).strftime('%Y%m%dT%H%M%S')
+                final = cam_dir / (f"{camera_id}_{stamp}Z_{end}Z.mp4" if args.end_in_name else f"{camera_id}_{stamp}Z.mp4")
+                if final.exists():                      # a restart in the same second: never rewrite a segment
+                    continue
+                part = cam_dir / f"{camera_id}_{stamp}Z.mp4.part"
+                with open(part, "wb") as f:
+                    f.write(os.urandom(max(int(args.size_mb * 1024 * 1024), 1)))
+                os.replace(part, final)                 # atomic: file appears complete
+                print(f"recorded {final} ({final.stat().st_size} bytes)", flush=True)
+            if args.retain_minutes > 0:
+                cutoff = time.time() - args.retain_minutes * 60
+                for old in root.glob("*/*/*.mp4"):
+                    if old.stat().st_mtime < cutoff:
+                        old.unlink()
+            time.sleep(args.interval)
+    except KeyboardInterrupt:
+        pass
+
+
+if __name__ == "__main__":
+    main()

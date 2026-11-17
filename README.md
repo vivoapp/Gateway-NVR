@@ -7,8 +7,9 @@ Compose project on the gateway.
 | Folder | What | Modules | Owner | Installed on the gateway at |
 |---|---|---|---|---|
 | [`recorder/`](recorder/) | Linux baseline, Frigate recording, go2rtc live streams, camera ingestion, storage, health | M1 to M12, M22, M25, M26 | Izzatullokh | `/opt/vivo-gateway` |
+| [`cloud/`](cloud/) | Cloud archive upload to Backblaze B2, camera discovery, edge agent, hardening, remote support | M4, M19, M20, M21, M23, M24 | Haris | `/opt/vivo-cloud` |
 
-Other parts (cloud upload and agent, video API) get their own folder when their owners add them.
+Other parts (video API) get their own folder when their owners add them.
 
 ## Shared contracts
 

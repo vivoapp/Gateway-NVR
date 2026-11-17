@@ -1,0 +1,46 @@
+# The uploader on the gateway (M19 + M20). Installed at /opt/vivo-cloud/uploader, run by the
+# `haris` user's rootless Docker. Secrets are not here: they come from /etc/vivo/cloud.env.
+#
+#   one-time:  docker compose --profile setup run --rm init-data
+#   start:     docker compose up -d --build
+#   look:      docker compose ps ; docker compose logs -f uploader
+name: vivo-cloud
+
+services:
+  uploader:
+    build:
+      context: ..
+      target: runtime
+    image: vivo-cloud-uploader:0.1.0
+    user: "10001:10001"
+    read_only: true                      # the container's own files cannot be changed
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    env_file: ${CLOUD_ENV_FILE:-/etc/vivo/cloud.env}     # S3 endpoint, bucket, prefix, keys
+    command: ["python", "-m", "segment_uploader", "run", "--config", "/etc/vivo-uploader/config.toml"]
+    volumes:
+      # The recorder's finished segments. Read-only: this service can never change or delete them.
+      - ${RECORDINGS_DIR:-/srv/vivo/recordings/substream}:/data/recordings:ro
+      # The uploader's own data (state file, index records) on the OS disk. It can be rebuilt.
+      - ${STATE_DIR:-/var/lib/vivo-cloud}:/data/state
+      - ./config.gateway.toml:/etc/vivo-uploader/config.toml:ro
+    cpus: 1.0
+    mem_limit: 512m
+    pids_limit: 200
+    logging:
+      driver: json-file
+      options: {max-size: "20m", max-file: "5"}
+    restart: unless-stopped
+
+  # Run once, before the first start: gives the data folder to user 10001.
+  init-data:
+    profiles: [setup]
+    image: vivo-cloud-uploader:0.1.0
+    user: "0:0"                          # root inside the container; in rootless Docker that is still only `haris`
+    entrypoint: ["chown", "-R", "10001:10001", "/data/state"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+    volumes:
+      - ${STATE_DIR:-/var/lib/vivo-cloud}:/data/state
+    restart: "no"

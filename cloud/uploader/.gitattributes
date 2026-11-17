@@ -1,0 +1,6 @@
+# Keep Unix line endings so the shell scripts run in Git Bash and in containers.
+*.sh text eol=lf
+run.sh text eol=lf
+*.toml text eol=lf
+*.yml text eol=lf
+Dockerfile text eol=lf
