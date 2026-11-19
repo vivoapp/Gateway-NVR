@@ -6,8 +6,12 @@ on an Intel N100/N150 mini-PC running Ubuntu Server 24.04 LTS.
 This repository covers Milestone 1 (Gateway foundation): M1 Linux baseline, M2 Frigate,
 M3 RTSP camera ingestion and M5 go2rtc stream integration, and Milestone 2 (Recording and
 storage): M6 performance baseline, M7 main stream and substream recording, M8 storage and disk,
-M9 retention, and Milestone 3 (Resilience and monitoring): M10 restart recovery, M11 power and
-disk faults, M12 integrity QA, M22 health telemetry. Later milestones build on it.
+M9 retention, Milestone 3 (Resilience and monitoring): M10 restart recovery, M11 power and disk
+faults, M12 integrity QA, M22 health telemetry, and Milestone 4 (Acceptance and handoff): M25 load
+and resource acceptance, M26 fault-simulation matrix and handoff. Later milestones build on it.
+
+- Deploy a gateway from a blank machine: docs/deploy.md
+- Known limitations and what to do next: docs/known-limitations.md
 
 ## Layout
 
@@ -31,12 +35,15 @@ tools/                config generator, camera probe, continuity report, PoE con
                       substream archiver (M7), storage guard (M8, M9), health endpoint (M22),
                       cleanup of segments a power cut left broken (M11), MP4 check
 tests/                one acceptance check per module; reports go to reports/
+                      (m26_matrix.py runs the M10-M12 fault tests as one matrix; handoff_check.py)
 tests/unit/           unit tests (python3 -m unittest discover -s tests/unit)
 tests/lab/            the stack with ten fake cameras on a workstation (tests/lab/README.md)
 docs/                 one page per module, design decisions, camera table
 ```
 
 ## Install on a blank gateway
+
+The full instructions, from the BIOS to the acceptance tests, are in docs/deploy.md. In short:
 
 1. Install Ubuntu Server 24.04 LTS (x86_64) on the gateway's OS disk. Add your SSH public key
    for the admin user during install.
@@ -113,6 +120,9 @@ sudo gateway/setup.sh --only stack
 | M11 | `tests/m11_faults.py power --host GW` (workstation), `sudo tests/m11_faults.py full-disk` / `missing-disk --yes` / `corrupt` | power cuts, full disk, missing disk, a damaged segment: the gateway recovers without a login |
 | M12 | `sudo tests/m12_integrity.py --hours 24 --spot 10` | every missing interval and unplayable segment with its cause; clock check; manual spot-check list |
 | M22 | `sudo tests/m22_check.py` | each health alert triggered on purpose and shown within 60 s |
+| M25 | `sudo systemd-run --unit vivo-m25 --collect -p TimeoutStopSec=10min /opt/vivo-gateway/tests/m25_load.py --counts 10 --hours 24` | 24 h at 10 cameras with everything on, nothing restarted (without `--counts`, also 1 h at 4 and 8 for comparison): CPU, RAM, temperature, disk headroom, zero unexplained gaps |
+| M26 | `tests/m26_matrix.py --host GW --plug-off ... --plug-on ...` (workstation) | the M10, M11 and M12 fault tests as one repeatable matrix, with a results table and a whole-window gap check |
+| M26 | `tests/handoff_check.py` (`sudo ... --secrets /etc/vivo/secrets.env` on the gateway) | no secrets committed, every version pinned, generated files current, docs and tests for every module |
 
 Every check writes a Markdown report to `reports/`. Reports never contain passwords.
 

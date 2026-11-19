@@ -7,6 +7,18 @@
   limit) in `recordings/substream/early-deletions.jsonl`, one line per camera and hour, and the health
   endpoint shows a tenth alert, `early_deletion` (warning, for 24 hours). `tests/m9_pressure.py` checks the
   list and `tests/m22_check.py` the alert (simulated). Segment format unchanged (docs/SEGMENT_FORMAT.md).
+- Milestone 4, built on a workstation and unit tested, not yet run on the reference gateway:
+  - M25: `tests/m25_load.py`, the load and resource acceptance run with everything in scope on (both
+    streams, retention, health endpoint): 1 h at 4 and 8 cameras, then 24 h at 10; checks CPU, RAM
+    (and its growth), temperature, disk headroom (including whether the agreed retention fits at the
+    measured rate) and unexplained gaps against the limits in docs/acceptance-limits-proposal.md.
+  - M26: `tests/m26_matrix.py` runs the M10, M11 and M12 fault tests as one matrix from a workstation,
+    with a results table and a check that no gap falls outside the steps; gateway steps run as
+    transient systemd units, so a dropped SSH session cannot stop one half-way.
+  - M26: `tests/handoff_check.py` (no secrets committed, versions pinned, generated files current, a
+    page and a test for every module, unit tests, everything committed), docs/deploy.md (blank
+    machine to working gateway), docs/known-limitations.md, docs/m26-handoff.md (with the
+    walkthrough agenda).
 - Milestone 3 (Resilience and monitoring: M10, M11, M12, M22), on the reference gateway since Nov 4;
   results in docs/milestone-3-results.md:
   - M22: health endpoint `tools/health.py` as the host service `vivo-health` (port 9101, `/health` JSON and

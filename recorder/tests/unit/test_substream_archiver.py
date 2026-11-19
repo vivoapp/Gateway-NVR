@@ -139,7 +139,7 @@ class Folders(unittest.TestCase):
 
 class Command(unittest.TestCase):
     def test_ffmpeg_command(self):
-        cmd = sa.ffmpeg_cmd(Path("/recordings/substream"), "cam01", "rtsp://u:p@go2rtc:8554/cam01_sub", "hevc")
+        cmd = sa.ffmpeg_cmd(Path("/recordings/substream"), "cam01", "rtsp://user:pass@go2rtc:8554/cam01_sub", "hevc")
         self.assertIn("-c", cmd)
         self.assertEqual(cmd[cmd.index("-c") + 1], "copy")
         self.assertEqual(cmd[cmd.index("-tag:v") + 1], "hvc1")
