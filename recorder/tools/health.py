@@ -21,10 +21,12 @@ import json
 import os
 import re
 import shutil
+import ssl
 import subprocess
 import sys
 import threading
 import time
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -62,7 +64,10 @@ ALERTS = {
     "clock_not_synced": "chrony is not synchronized, or the clock is off by more than the limit",
     "container_down": "a recorder container is not running",
     "early_deletion": "substream segments were deleted before their retention ended, to keep the disk under its safe limit",
+    "video_api_down": "the Video API (Block C, /opt/vivo-video-api) is installed but does not answer",
 }
+VIDEO_API_DIR = Path(os.environ.get("VIDEO_API_DIR", "/opt/vivo-video-api"))
+VIDEO_API_HEALTH = os.environ.get("VIDEO_API_HEALTH", "https://127.0.0.1:8443/v1/health")
 
 
 def run(cmd: list[str], timeout: float = 15) -> str:
@@ -211,6 +216,9 @@ def evaluate(snap: dict, memory: dict, now: float, levels: dict = LEVELS) -> lis
     for name, c in snap.get("containers", {}).items():
         if c.get("state") != "running":
             add("container_down", name, "critical", f"state {c.get('state', 'missing')}")
+    api = snap.get("video_api", {})
+    if api.get("installed") and not api.get("up"):
+        add("video_api_down", "video-api", "critical", f"no answer from {VIDEO_API_HEALTH}")
     active = {f"{a['alert']}:{a['target']}" for a in alerts}
     memory["since"] = {k: v for k, v in memory.get("since", {}).items() if k in active}
     return alerts
@@ -307,6 +315,20 @@ class Collector:
                 out[parts[0].lstrip("/")] = {"state": parts[1], "restarts": int(parts[2]), "started": parts[3][:19] + "Z"}
         return out
 
+    def video_api(self) -> dict:
+        """Block C's Video API, when installed. Its certificate is self-signed and it is asked on
+        127.0.0.1 only, so the certificate is not checked."""
+        if not VIDEO_API_DIR.is_dir():
+            return {"installed": False}
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        try:
+            with urllib.request.urlopen(VIDEO_API_HEALTH, timeout=5, context=ctx) as r:
+                return {"installed": True, "up": r.status == 200}
+        except (OSError, ValueError):
+            return {"installed": True, "up": False}
+
     def disk(self, media: Path, policy: dict, now: float) -> dict:
         mounted = os.path.ismount(media)
         d = {"path": str(media), "mounted": mounted, "limit_percent": policy["disk_limit_percent"],
@@ -345,7 +367,8 @@ class Collector:
         policy = vivo.services_config()
         media = Path(vivo.SITE.get("MEDIA_ROOT", "/srv/vivo"))
         snap = {"time": vivo.utc(now), "gateway": self.gateway(), "cameras": self.cameras(policy["cameras"], media, now),
-                "recorder": self.recorder(now), "disk": self.disk(media, policy, now), "containers": self.containers()}
+                "recorder": self.recorder(now), "disk": self.disk(media, policy, now), "containers": self.containers(),
+                "video_api": self.video_api()}
         ov = self.overrides()
         if ov:   # tests only: shown in the snapshot so nobody mistakes it for the real state
             snap["test_overrides"] = ov

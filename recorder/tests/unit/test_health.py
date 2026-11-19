@@ -150,3 +150,15 @@ class Prometheus(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VideoApiAlert(unittest.TestCase):
+    """Block C: the Video API is watched only when it is installed."""
+
+    def test_down_only_when_installed(self):
+        base = {"cameras": {}, "recorder": {"frigate_up": True}, "disk": {"mounted": True}, "containers": {},
+                "gateway": {"clock": {"synced": True, "offset_s": 0.0}}}
+        alerts = lambda api: [a["alert"] for a in health.evaluate({**base, "video_api": api}, {}, 0.0)]  # noqa: E731
+        self.assertNotIn("video_api_down", alerts({"installed": False}))
+        self.assertNotIn("video_api_down", alerts({"installed": True, "up": True}))
+        self.assertIn("video_api_down", alerts({"installed": True, "up": False}))

@@ -1,0 +1,19 @@
+# Test stand-in for Haris's M21 connection (M15 remote test only; docs/turn-runbook.md).
+# One outbound SSH connection from the gateway to Vivo's test server, which forwards the server's
+# 127.0.0.1:18443 to the Video API. No port opens at the site. Remove after the test.
+[Unit]
+Description=Vivo test tunnel to the test server (M15 remote test)
+After=network-online.target vivo-video-api.service
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/vivo/test-tunnel/server.env
+ExecStart=/usr/bin/ssh -N -i /etc/vivo/test-tunnel/id_ed25519 \
+  -o UserKnownHostsFile=/etc/vivo/test-tunnel/known_hosts -o StrictHostKeyChecking=yes \
+  -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
+  -R 127.0.0.1:18443:127.0.0.1:8443 vivo-tunnel@${TEST_SERVER}
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

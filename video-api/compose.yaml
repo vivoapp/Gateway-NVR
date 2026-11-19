@@ -1,0 +1,46 @@
+# Vivo Video API (Block C). Installed at /opt/vivo-video-api by gateway/setup.sh and started by
+# vivo-video-api.service. Host networking: it listens only on 127.0.0.1 and the gateway's LAN
+# address (port 8443, HTTPS) and reaches go2rtc, Frigate and the health service on 127.0.0.1.
+# ufw allows 8443 from the site's LAN and admin networks only.
+name: vivo-video-api
+
+services:
+  video-api:
+    container_name: video-api      # a fixed name: tests/soak72.py restarts and samples it
+    image: vivo-video-api:${VIDEO_API_VERSION:-1.0.0}
+    build:
+      context: .
+      target: runtime
+    network_mode: host
+    restart: unless-stopped
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    cpus: 1.0
+    mem_limit: 512m
+    env_file:
+      - /etc/vivo/site.env
+      - /etc/vivo/video-api.env
+    environment:
+      VIDEO_API_INVENTORY: /inventory/cameras.yaml
+      VIDEO_API_KEYS: /keys/rails.jwks.json
+      VIDEO_API_DATA: /data
+      VIDEO_API_TLS_CERT: /tls/cert.pem
+      VIDEO_API_TLS_KEY: /tls/key.pem
+      LIVE_GATE_DIR: /gate
+      MOCK_DIR: /data/mock
+    volumes:
+      - /opt/vivo-gateway/cameras.yaml:/inventory/cameras.yaml:ro
+      - /etc/vivo/video-api-keys:/keys:ro
+      - /etc/vivo/video-api-tls:/tls:ro
+      - ${MEDIA_ROOT:-/srv/vivo}/video-api:/data
+      - /run/vivo-live-gate:/gate
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "5"

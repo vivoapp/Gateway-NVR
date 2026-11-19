@@ -15,6 +15,7 @@ webrtc:
   listen: :8555
   candidates:
   - ${GATEWAY_LAN_IP}:8555
+  - stun:8555
 log:
   format: text
   level: info

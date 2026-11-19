@@ -1,0 +1,30 @@
+# Caddy on the test server (docs/turn-runbook.md): a real certificate for <public-ip-with-dashes>.sslip.io,
+# and three things behind it, all on one address so the phone needs no special settings:
+#   /v1/*     the gateway's Video API, through the gateway's outbound tunnel (127.0.0.1:18443)
+#   /test/*   the test grant issuer (Rails stand-in), behind a password: only testers get grants
+#   /         the test player
+# Replace @HOST@ (for example 203-0-113-10.sslip.io) and @TESTER_HASH@ (caddy hash-password).
+@HOST@ {
+	handle /v1/* {
+		reverse_proxy https://127.0.0.1:18443 {
+			transport http {
+				# the gateway's self-signed certificate (until Haris's M23); the tunnel is the trust here
+				tls_insecure_skip_verify
+			}
+		}
+	}
+	handle_path /test/* {
+		basic_auth {
+			tester @TESTER_HASH@
+		}
+		reverse_proxy 127.0.0.1:8099
+	}
+	handle {
+		basic_auth {
+			tester @TESTER_HASH@
+		}
+		root * /srv/vivo-test
+		file_server
+	}
+	header -Server
+}

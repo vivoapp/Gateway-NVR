@@ -1,0 +1,22 @@
+# Cuts one live viewer off when the Video API asks (docs/adr/0002-live-sessions.md).
+# Root, because it adds iptables rules; limited to network administration and the folders it uses.
+# Installed by video-api/gateway/setup.sh.
+[Unit]
+Description=Vivo live-view gate for the Video API (ADR 0002)
+Requires=docker.service
+After=docker.service
+
+[Service]
+ExecStart=/usr/bin/python3 @INSTALL_DIR@/gateway/live_gate.py --dir /run/vivo-live-gate
+Restart=always
+RestartSec=2
+NoNewPrivileges=yes
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/run
+RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

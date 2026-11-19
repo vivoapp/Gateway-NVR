@@ -1,6 +1,17 @@
 # Lab override for hosts without an Intel GPU (for example a Jetson or a laptop).
 # Used only for testing the stack and scripts with real cameras before the gateway exists:
 #   docker compose -f compose.yaml -f tests/lab/compose.lab.yaml --env-file versions.env --env-file $VIVO_ETC/site.env up -d
+# On a workstation every port stays on 127.0.0.1: a laptop may sit on a public address, and there
+# is no gateway firewall in front of the lab.
 services:
   frigate:
     devices: !reset []
+    ports: !override
+      - "127.0.0.1:8971:8971"
+      - "127.0.0.1:5000:5000"
+  go2rtc:
+    ports: !override
+      - "127.0.0.1:1984:1984"
+      - "127.0.0.1:8554:8554"
+      - "127.0.0.1:8555:8555/tcp"
+      - "127.0.0.1:8555:8555/udp"

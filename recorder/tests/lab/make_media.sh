@@ -25,4 +25,14 @@ if [[ ! -s "$OUT/sub.mkv" ]]; then
     $x265 -b:v 150k -an "$OUT/sub.mkv.tmp.mkv"
   mv "$OUT/sub.mkv.tmp.mkv" "$OUT/sub.mkv"
 fi
+if [[ ! -s "$OUT/sub-h264.mkv" ]]; then
+  # The substream planned for Block C live view: H.264 640x360, 15 fps, a keyframe every second,
+  # 512 kbit/s cap. Used when the lab is started with LAB_SUB=h264.
+  echo "making sub-h264.mkv (640x360 H.264, 60 s)"
+  ffmpeg -hide_banner -loglevel error -y \
+    -f lavfi -i "testsrc2=size=640x360:rate=15:duration=60" \
+    -c:v libx264 -preset veryfast -profile:v main -pix_fmt yuv420p -g 15 -keyint_min 15 -sc_threshold 0 -bf 0 \
+    -b:v 400k -maxrate 512k -bufsize 512k -an "$OUT/sub-h264.mkv.tmp.mkv"
+  mv "$OUT/sub-h264.mkv.tmp.mkv" "$OUT/sub-h264.mkv"
+fi
 ls -l "$OUT"

@@ -1,0 +1,4 @@
+# /etc/tmpfiles.d/vivo-live-gate.conf: made at every boot. The Video API container (user 10001)
+# writes cut and release requests into requests/; vivo-live-gate (root) reads and deletes them.
+d /run/vivo-live-gate          0755 root  root  -
+d /run/vivo-live-gate/requests 0700 10001 10001 -

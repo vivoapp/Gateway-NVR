@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vivo Video API test player</title>
+<style>
+  :root { color-scheme: light dark; --bg: #f6f7f9; --fg: #15181d; --muted: #5d6673; --card: #fff; --line: #d9dde3; --accent: #2563eb; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0f1218; --fg: #e8eaed; --muted: #9aa4b2; --card: #171b23; --line: #2a3343; --accent: #6ea0ff; } }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 -apple-system, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.sub { color: var(--muted); margin: 0 0 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+  label { display: inline-flex; gap: 6px; align-items: center; margin: 0 14px 8px 0; }
+  input[type=text] { width: 230px; } input.short { width: 70px; }
+  button { background: var(--accent); color: #fff; border: 0; border-radius: 6px; padding: 7px 12px; margin: 0 6px 6px 0; cursor: pointer; }
+  video { width: 100%; max-height: 420px; background: #000; border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  td, th { border-bottom: 1px solid var(--line); padding: 5px 6px; text-align: left; }
+  #log { font: 12px/1.4 Menlo, monospace; white-space: pre-wrap; max-height: 220px; overflow: auto; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Vivo Video API test player</h1>
+  <p class="sub">Test tool for M15 and M16: live view over WebRTC with renewals, playback over HLS. It gets grants from the test grant issuer (the Rails stand-in).</p>
+  <div class="card">
+    <label>API <input type="text" id="api"></label>
+    <label>Grant issuer <input type="text" id="issuer"></label>
+    <label>Camera <input type="text" id="cam" class="short"></label>
+    <label>Stream <select id="stream"><option>sub</option><option>main</option></select></label>
+    <label><input type="checkbox" id="relay"> Force TURN relay</label>
+    <label>Attempts <input type="text" id="n" class="short" value="10"></label>
+    <div>
+      <button id="bLive">Live</button><button id="bStop">Stop</button><button id="bRun">Run attempts</button>
+      <button id="bRevoke">Revocation test</button><button id="bPlay">Playback last 10 min</button>
+    </div>
+  </div>
+  <div class="card"><video id="v" muted playsinline autoplay controls></video></div>
+  <div class="card"><table id="res"><thead><tr><th>#</th><th>First frame</th><th>Path</th><th>Notes</th></tr></thead><tbody></tbody></table>
+    <p id="sum"></p></div>
+  <div class="card"><div id="log"></div></div>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const q = new URLSearchParams(location.search);
+$("api").value = q.get("api") || "https://127.0.0.1:8443";
+$("issuer").value = q.get("issuer") || "http://127.0.0.1:8099";
+$("cam").value = q.get("cam") || "cam01";
+$("stream").value = q.get("stream") || "sub";
+$("relay").checked = q.get("relay") === "1";
+if (q.get("n")) $("n").value = q.get("n");
+window.results = []; window.done = false; window.revoke = null;
+const log = (m) => { $("log").textContent += `${new Date().toISOString().slice(11, 23)} ${m}\n`; console.log(m); };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const api = () => $("api").value.replace(/\/$/, "");
+
+async function grant(cams, perms, ttl = 60) {
+  const r = await fetch(`${$("issuer").value}/grant?cams=${cams}&perms=${perms}&ttl=${ttl}`);
+  return (await r.text()).trim();
+}
+async function call(method, path, token, body) {
+  const r = await fetch(api() + path, { method, headers: { Authorization: `Bearer ${token}`, ...(body ? { "Content-Type": "application/json" } : {}) },
+    body: body ? JSON.stringify(body) : undefined });
+  const text = await r.text();
+  let data = null; try { data = JSON.parse(text); } catch {}
+  if (!r.ok) throw Object.assign(new Error(`${method} ${path}: ${r.status} ${text}`), { status: r.status, data });
+  return data;
+}
+
+let cur = null;   // {session, pc, renewTimer, cam}
+async function stopLive(reason = "stop") {
+  if (!cur) return;
+  const c = cur; cur = null;
+  clearInterval(c.renewTimer);
+  try { await call("DELETE", `/v1/live/${c.session.session_id}`, await grant(c.cam, "live")); } catch (e) { log(e.message); }
+  c.pc.close();
+  $("v").srcObject = null;
+}
+
+function firstFrame(video, t0, timeout = 15000) {
+  return new Promise((resolve) => {
+    let done = false;
+    const timer = setTimeout(() => { if (!done) { done = true; resolve(null); } }, timeout);
+    video.requestVideoFrameCallback((now) => { if (!done) { done = true; clearTimeout(timer); resolve(now - t0); } });
+  });
+}
+
+async function pathOf(pc) {
+  const stats = await pc.getStats();
+  let pair = null; const cands = {};
+  stats.forEach((s) => { if (s.type === "candidate-pair" && s.nominated && s.state === "succeeded") pair = s;
+                         if (s.type === "remote-candidate" || s.type === "local-candidate") cands[s.id] = s; });
+  if (!pair) return "?";
+  const l = cands[pair.localCandidateId], r = cands[pair.remoteCandidateId];
+  return `${l?.candidateType}/${l?.protocol} -> ${r?.candidateType} ${r?.address}:${r?.port}`;
+}
+
+async function startLive() {
+  await stopLive();
+  const cam = $("cam").value, stream = $("stream").value, relay = $("relay").checked;
+  const g = await grant(cam, "live");
+  const t0 = performance.now();
+  const session = await call("POST", `/v1/cameras/${cam}/live`, g, { stream });
+  const pc = new RTCPeerConnection({ iceServers: session.ice_servers.map((s) => ({ urls: s.urls, username: s.username || undefined, credential: s.credential || undefined })),
+                                     iceTransportPolicy: relay ? "relay" : "all" });
+  pc.addTransceiver("video", { direction: "recvonly" });
+  pc.addTransceiver("audio", { direction: "recvonly" });
+  const v = $("v");
+  pc.ontrack = (e) => { if (e.track.kind === "video") v.srcObject = new MediaStream([e.track]); };
+  await pc.setLocalDescription(await pc.createOffer());
+  await new Promise((r) => { if (pc.iceGatheringState === "complete") r(); pc.addEventListener("icegatheringstatechange", () => pc.iceGatheringState === "complete" && r()); setTimeout(r, relay ? 3000 : 1500); });
+  const ans = await call("POST", `/v1/live/${session.session_id}/offer`, g, { sdp: pc.localDescription.sdp });
+  await pc.setRemoteDescription({ type: "answer", sdp: ans.sdp });
+  const renewTimer = setInterval(async () => {
+    try { await call("POST", `/v1/live/${session.session_id}/renew`, await grant(cam, "live")); }
+    catch (e) { log(`renew refused: ${e.message}`); }
+  }, session.renew_after_seconds * 1000);
+  cur = { session, pc, renewTimer, cam };
+  const ff = await firstFrame(v, t0);
+  return { ms: ff, session, pc, path: ff !== null ? await pathOf(pc) : "no video" };
+}
+
+function addRow(i, ms, path, note) {
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td>${i}</td><td>${ms === null ? "none" : (ms / 1000).toFixed(2) + " s"}</td><td>${path}</td><td>${note || ""}</td>`;
+  $("res").querySelector("tbody").appendChild(tr);
+}
+const median = (a) => { const s = [...a].sort((x, y) => x - y); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+
+async function runAttempts() {
+  const n = parseInt($("n").value, 10) || 10;
+  window.results = []; window.done = false;
+  for (let i = 1; i <= n; i++) {
+    let r;
+    try { r = await startLive(); } catch (e) { r = { ms: null, path: "error", note: e.message }; }
+    window.results.push({ attempt: i, first_frame_ms: r.ms === null ? null : Math.round(r.ms), path: r.path, note: r.note || "" });
+    addRow(i, r.ms, r.path, r.note);
+    await sleep(1500);
+    await stopLive();
+    await sleep(800);
+  }
+  const ok = window.results.filter((r) => r.first_frame_ms !== null).map((r) => r.first_frame_ms);
+  $("sum").textContent = ok.length ? `median ${(median(ok) / 1000).toFixed(2)} s over ${ok.length} of ${n}` : "no video";
+  window.done = true;
+}
+
+async function revocationTest() {
+  // Start watching, then renew with a grant that no longer covers the camera (access revoked):
+  // the gateway must close the session and cut the video. Measures until frames stop.
+  window.revoke = null;
+  const r = await startLive();
+  if (r.ms === null) { window.revoke = { error: "no video before the test" }; return; }
+  clearInterval(cur.renewTimer);
+  await sleep(3000);
+  const v = $("v"); let frames = 0, last = performance.now();
+  const tick = () => { frames++; last = performance.now(); v.requestVideoFrameCallback(tick); };
+  v.requestVideoFrameCallback(tick);
+  await sleep(1000);
+  const before = frames;
+  const other = $("cam").value === "cam02" ? "cam03" : "cam02";
+  const t0 = performance.now();
+  let status = null;
+  try { await call("POST", `/v1/live/${r.session.session_id}/renew`, await grant(other, "live")); } catch (e) { status = e.status; }
+  while (performance.now() - last < 1500 && performance.now() - t0 < 20000) await sleep(100);
+  const stopped = performance.now() - t0 < 20000;
+  window.revoke = { renew_status: status, frames_before: before, video_stopped: stopped,
+                    stopped_after_ms: stopped ? Math.round(Math.max(0, last - t0)) : null, path: r.path,
+                    peer_state_after: r.pc.connectionState, session_id: r.session.session_id };
+  log(`revocation: ${JSON.stringify(window.revoke)}`);
+  clearInterval(cur?.renewTimer); cur && cur.pc.close(); cur = null;
+}
+
+async function playback() {
+  await stopLive();
+  const cam = $("cam").value, g = await grant(cam, "playback", 120);
+  const end = new Date(Date.now() - 30000), start = new Date(end - 600000);
+  const iso = (d) => d.toISOString().replace(/\.\d+Z$/, "Z");
+  const t0 = performance.now();
+  const pb = await call("POST", `/v1/cameras/${cam}/playback`, g, { start: iso(start), end: iso(end) });
+  const v = $("v"); v.srcObject = null;
+  const hls = new Hls(); hls.loadSource(api() + pb.url); hls.attachMedia(v);
+  const ff = await firstFrame(v, t0);
+  window.playbackResult = { first_frame_ms: ff === null ? null : Math.round(ff), url: pb.url };
+  log(`playback first frame: ${ff === null ? "none" : (ff / 1000).toFixed(2) + " s"}`);
+}
+
+async function loadTest(plan, seconds = 600) {
+  // Many viewers at once (M15 load): plan = {"cam01": 5, "cam02": 1, ...}. Each viewer has its own
+  // session, peer connection and renewals; frames are counted per viewer. Returns per-viewer results.
+  await stopLive();
+  const viewers = [];
+  for (const [cam, n] of Object.entries(plan)) {
+    for (let i = 0; i < n; i++) {
+      const v = document.createElement("video"); v.muted = true; v.autoplay = true; v.playsInline = true; v.width = 160;
+      document.body.appendChild(v);
+      const rec = { cam, frames: 0, ok: false, error: null, first_ms: null };
+      try {
+        const g = await grant(cam, "live");
+        const t0 = performance.now();
+        const s = await call("POST", `/v1/cameras/${cam}/live`, g, { stream: "sub" });
+        const pc = new RTCPeerConnection({ iceServers: s.ice_servers.map((x) => ({ urls: x.urls, username: x.username || undefined, credential: x.credential || undefined })) });
+        pc.addTransceiver("video", { direction: "recvonly" });
+        pc.ontrack = (e) => { v.srcObject = new MediaStream([e.track]); };
+        await pc.setLocalDescription(await pc.createOffer());
+        await new Promise((r) => { if (pc.iceGatheringState === "complete") r(); pc.addEventListener("icegatheringstatechange", () => pc.iceGatheringState === "complete" && r()); setTimeout(r, 1500); });
+        const a = await call("POST", `/v1/live/${s.session_id}/offer`, g, { sdp: pc.localDescription.sdp });
+        await pc.setRemoteDescription({ type: "answer", sdp: a.sdp });
+        const tick = (now) => { if (rec.first_ms === null) rec.first_ms = Math.round(now - t0); rec.frames++; v.requestVideoFrameCallback(tick); };
+        v.requestVideoFrameCallback(tick);
+        rec.session = s.session_id; rec.pc = pc; rec.ok = true;
+        rec.renew = setInterval(async () => { try { await call("POST", `/v1/live/${s.session_id}/renew`, await grant(cam, "live")); } catch (e) { rec.error = e.message; } }, s.renew_after_seconds * 1000);
+      } catch (e) { rec.error = e.message; rec.status = e.status; rec.limit = e.data?.limit; }
+      viewers.push(rec);
+    }
+  }
+  window.loadProgress = viewers;
+  const start = performance.now();
+  await sleep(seconds * 1000);
+  const elapsed = (performance.now() - start) / 1000;
+  const out = viewers.map((r) => ({ cam: r.cam, ok: r.ok, first_ms: r.first_ms, fps: r.ok ? +(r.frames / elapsed).toFixed(1) : 0,
+                                    error: r.error, status: r.status, limit: r.limit }));
+  for (const r of viewers) {
+    clearInterval(r.renew);
+    if (r.session) { try { await call("DELETE", `/v1/live/${r.session}`, await grant(r.cam, "live")); } catch {} }
+    r.pc?.close();
+  }
+  return out;
+}
+
+async function playbackTest(minutes = 1440, seeks = 20, starts = 5) {
+  // First picture of `starts` playbacks of the last `minutes` (median), then random seeks in the last one.
+  await stopLive();
+  const cam = $("cam").value;
+  const iso = (d) => d.toISOString().replace(/\.\d+Z$/, "Z");
+  const v = $("v"); v.srcObject = null;
+  const firsts = [];
+  let hls = null, pb = null;
+  for (let i = 0; i < starts; i++) {
+    if (hls) { hls.destroy(); try { await call("DELETE", `/v1/playback/${pb.playback_id}`, await grant(cam, "playback")); } catch {} await sleep(500); }
+    const g = await grant(cam, "playback", 120);
+    const end = new Date(Date.now() - 30000), start = new Date(end - Math.min(minutes, 1440) * 60000);
+    const t0 = performance.now();
+    try { pb = await call("POST", `/v1/cameras/${cam}/playback`, g, { start: iso(start), end: iso(end) }); }
+    catch (e) { return { error: e.message }; }
+    const steps = { request_ms: Math.round(performance.now() - t0) };
+    hls = new Hls({ maxBufferLength: 10 });
+    hls.on(Hls.Events.MANIFEST_LOADED, () => { steps.playlist_ms ??= Math.round(performance.now() - t0); });
+    hls.on(Hls.Events.FRAG_LOADED, () => { steps.first_piece_ms ??= Math.round(performance.now() - t0); });
+    hls.on(Hls.Events.FRAG_BUFFERED, () => { steps.buffered_ms ??= Math.round(performance.now() - t0); });
+    hls.loadSource(api() + pb.url); hls.attachMedia(v);
+    const ff = await firstFrame(v, t0);
+    firsts.push({ ms: ff === null ? null : Math.round(ff), ...steps });
+    log(`start ${i + 1}: first picture ${ff === null ? "none" : Math.round(ff) + " ms"} ${JSON.stringify(steps)}`);
+    if (ff === null) { hls.destroy(); return { error: "no picture", firsts }; }
+  }
+  const renew = setInterval(async () => { try { await call("POST", `/v1/playback/${pb.playback_id}/renew`, await grant(cam, "playback", 120)); } catch (e) { log(e.message); } }, 30000);
+  const out = [];
+  for (let i = 0; i < seeks; i++) {
+    const at = Math.random() * Math.max(1, v.duration - 5);
+    const s0 = performance.now();
+    const ms = await new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(null), 10000);
+      v.addEventListener("seeked", () => v.requestVideoFrameCallback(() => { clearTimeout(timer); resolve(Math.round(performance.now() - s0)); }), { once: true });
+      v.currentTime = at;
+    });
+    out.push({ at_s: at, ms });
+    log(`seek ${i + 1} to ${at.toFixed(0)} s: ${ms === null ? "no frame" : ms + " ms"}`);
+  }
+  const duration = v.duration;
+  clearInterval(renew); hls.destroy();
+  try { await call("DELETE", `/v1/playback/${pb.playback_id}`, await grant(cam, "playback")); } catch {}
+  return { firsts, start: pb.start, end: pb.end, duration_s: duration, seeks: out };
+}
+
+$("bLive").onclick = () => startLive().then((r) => addRow("live", r.ms, r.path)).catch((e) => log(e.message));
+$("bStop").onclick = () => stopLive();
+$("bRun").onclick = () => runAttempts();
+$("bRevoke").onclick = () => revocationTest().catch((e) => log(e.message));
+$("bPlay").onclick = () => playback().catch((e) => log(e.message));
+window.vivo = { runAttempts, revocationTest, playback, playbackTest, loadTest, startLive, stopLive };
+</script>
+</body>
+</html>

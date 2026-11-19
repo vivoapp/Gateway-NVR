@@ -374,8 +374,14 @@ step_firewall() {
   local rules="" nets
   nets="$(printf '%s,%s' "$LAN_CIDRS" "$ADMIN_CIDRS" | tr ',' '\n' | sed '/^$/d' | sort -u)"
   for c in $nets; do rules+="-A DOCKER-USER -s $c -j RETURN"$'\n'; done
+  local public="# WEBRTC_PUBLIC is off: UDP 8555 only from the networks above"
+  # Answers to the gateway's own traffic pass the RELATED,ESTABLISHED rule above; this limits only new
+  # packets from one address (a viewer sends a few dozen a second), so a flood cannot fill the uplink.
+  [[ "${WEBRTC_PUBLIC:-0}" == "1" ]] && public="-A DOCKER-USER -p udp --dport 8555 -m hashlimit --hashlimit-name vivo-webrtc --hashlimit-mode srcip --hashlimit-above 200/sec --hashlimit-burst 400 -j DROP
+-A DOCKER-USER -p udp --dport 8555 -j RETURN"
   local block
   block="$(sed -e "/@ALLOWED_NETWORKS@/{r /dev/stdin" -e 'd}' "$REPO/gateway/files/ufw-docker-user.rules" <<<"${rules%$'\n'}")"
+  block="${block/@PUBLIC_WEBRTC@/$public}"
   local after=/etc/ufw/after.rules new
   new="$(sed '/^# BEGIN VIVO DOCKER-USER$/,/^# END VIVO DOCKER-USER$/d' "$after" 2>/dev/null || true)"
   printf '%s\n%s\n' "$new" "$block" | put_file "$after" 640

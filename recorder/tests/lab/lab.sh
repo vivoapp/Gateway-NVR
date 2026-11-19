@@ -59,6 +59,10 @@ inv["cameras"] = inv["cameras"][:n]
 open(dst, "w").write("# Lab inventory: first %d cameras of tests/lab/fakecams.yaml\n" % n + yaml.safe_dump(inv, sort_keys=False))
 PY
   python3 "$PROJECT/tools/gen_config.py" --inventory "$PROJECT/cameras.yaml" --out "$PROJECT" >/dev/null
+  # LAB_SUB=h264: the fake cameras send the H.264 substream planned for Block C live view.
+  if [[ "${LAB_SUB:-h265}" == "h264" ]]; then
+    sed -i.bak 's#/clips/sub.mkv#/clips/sub-h264.mkv#' "$PROJECT/tests/lab/fakecam.yaml" && rm -f "$PROJECT/tests/lab/fakecam.yaml.bak"
+  fi
 }
 
 prepare() {

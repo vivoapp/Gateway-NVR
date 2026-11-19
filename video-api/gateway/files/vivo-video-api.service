@@ -1,0 +1,21 @@
+# Vivo Video API (Block C): https://<GATEWAY_LAN_IP>:8443/v1/... Installed by video-api/gateway/setup.sh.
+# The container restarts by itself (restart: unless-stopped); this unit brings it up on every boot,
+# after the recorder and the live gate.
+[Unit]
+Description=Vivo Video API (Block C)
+Requires=docker.service
+Wants=vivo-live-gate.service network-online.target
+After=docker.service network-online.target vivo-gateway.service vivo-live-gate.service
+# clips and the audit log are on the recording disk
+RequiresMountsFor=@MEDIA_ROOT@
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=@INSTALL_DIR@
+ExecStart=/usr/bin/docker compose --project-directory @INSTALL_DIR@ --env-file /etc/vivo/site.env up -d --remove-orphans
+ExecStop=/usr/bin/docker compose --project-directory @INSTALL_DIR@ --env-file /etc/vivo/site.env stop
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

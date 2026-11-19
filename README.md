@@ -7,8 +7,9 @@ Compose project on the gateway.
 | Folder | What | Modules | Owner | Installed on the gateway at |
 |---|---|---|---|---|
 | [`recorder/`](recorder/) | Linux baseline, Frigate recording, go2rtc live streams, camera ingestion, storage, health | M1 to M12, M22, M25, M26 | Izzatullokh | `/opt/vivo-gateway` |
+| [`video-api/`](video-api/) | Vivo Video API for Vivo Watch: grants, cameras, live view (WebRTC/TURN), playback, clips | M13 to M18 | Izzatullokh | `/opt/vivo-video-api` |
 
-Other parts (cloud upload and agent, video API) get their own folder when their owners add them.
+Other parts (cloud upload and agent) get their own folder when their owners add them.
 
 ## Shared contracts
 
@@ -18,6 +19,8 @@ Agreements between the parts. Change them only by written agreement between the 
   substream segments that the cloud uploader reads (`/srv/vivo/recordings/substream`).
 - [Sharing the gateway](recorder/docs/shared-gateway.md): how other services reach the recorder
   (camera list, go2rtc, Frigate API), their accounts, and the rules on the shared gateway.
+- [Video API contract](video-api/docs/api-contract.md): what Rails and Vivo Watch can ask the gateway,
+  and the grant format Rails signs.
 
 ## Rules for everyone
 

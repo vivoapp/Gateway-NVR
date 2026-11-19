@@ -1,13 +1,15 @@
 # Sharing the gateway with other services
 
 The recorder (this folder) runs go2rtc and Frigate in the system Docker. Other parts of Vivo Gateway
-NVR run as separate Compose projects in their owners' rootless Docker, set up by Vivo (Jorge). They
-reach the recorder over the gateway's LAN address, because separate Docker daemons share no network.
+NVR run as separate Compose projects. The cloud uploader runs in its owner's rootless Docker, set up by
+Vivo (Jorge), and reaches the recorder over the gateway's LAN address, because separate Docker daemons
+share no network. The Video API runs in the system Docker with host networking and reaches the
+recorder on 127.0.0.1.
 
 | Service | Owner | Folder | Secrets file (root, readable only by the owner) | Reads from the recorder |
 |---|---|---|---|---|
 | Cloud uploader and agent (M19 to M21) | Haris | `/opt/vivo-cloud`, data in `/var/lib/vivo-cloud` | `/etc/vivo/cloud.env` | substream segments, read-only (docs/SEGMENT_FORMAT.md) |
-| Video API (M13 to M18) | open (Marlon until Oct 27, 2026) | `/opt/vivo-video-api` | `/etc/vivo/video-api.env` | camera list, go2rtc, Frigate API |
+| Video API (M13 to M18) | Izzatullokh (since Nov 8, 2026; Marlon until Oct 27) | `/opt/vivo-video-api`, data in `/srv/vivo/video-api` | `/etc/vivo/video-api.env` | camera list, go2rtc API, Frigate API (viewer), health |
 
 ## What the recorder offers (reference gateway, 192.168.30.200)
 
@@ -28,8 +30,8 @@ reach the recorder over the gateway's LAN address, because separate Docker daemo
   port 8971 and read recordings, stats, HLS playback (`/vod/`) and `clip.mp4`; it can also start export jobs
   (`POST /api/export/...`) but cannot delete them (`POST /api/exports/delete` needs the admin role); admin-only
   calls such as the user list are refused (403). Deleted Oct 27, 2026 when Marlon left the project; at the same
-  time the go2rtc API and restream passwords were changed and `/etc/vivo/video-api.env` was emptied. A new
-  account with the same role is made for the next Video API owner.
+  time the go2rtc API and restream passwords were changed and `/etc/vivo/video-api.env` was emptied.
+  `video-api/gateway/setup.sh` makes it again (same role, a new random password in `/etc/vivo/video-api.env`).
 - go2rtc has one API login and one restream login, shared with services that need them. Changing them means
   updating `/etc/vivo/secrets.env` and every service file that copies them.
 

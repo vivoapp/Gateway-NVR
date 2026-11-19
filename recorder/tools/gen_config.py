@@ -118,7 +118,9 @@ def build_go2rtc(inv: dict) -> dict:
         },
         "webrtc": {
             "listen": ":8555",
-            "candidates": ["${GATEWAY_LAN_IP}:8555"],
+            # LAN address, plus the public address found with STUN: used only when the site
+            # forwards UDP 8555 to the gateway (Block C remote live view, WEBRTC_PUBLIC=1).
+            "candidates": ["${GATEWAY_LAN_IP}:8555", "stun:8555"],
         },
         "log": {"format": "text", "level": "info"},
         "streams": streams,
