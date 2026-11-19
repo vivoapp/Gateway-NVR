@@ -12,12 +12,14 @@ usage:
   tests/m26_matrix.py --host vivo-n150 --only m11-corrupt,m12-integrity
   tests/m26_matrix.py --host vivo-n150 --skip m10-disconnect,m11-power   # without PoE control or smart plug
 
-Steps, in this order (the scope's counts; --quick runs one event of each kind):
+Steps, in this order (the scope's counts; --quick runs one event of each kind). The two steps that
+may need someone on site (camera cables, power) come first, so their part is one block of about
+1 h 20 min at the start:
 
-  m10-kill          Frigate killed 10 times                         gateway       about 20 min
   m10-disconnect    5 camera disconnects through the PoE switch     gateway       about 15 min
-  m10-reboot        10 gateway reboots                              workstation   about 1 h
   m11-power         10 power cuts with the smart plug               workstation   about 1 h
+  m10-kill          Frigate killed 10 times                         gateway       about 20 min
+  m10-reboot        10 gateway reboots                              workstation   about 1 h
   m11-full-disk     recording disk filled to its safe limit         gateway       about 15 min
   m11-missing-disk  recording disk taken away and given back        gateway       about 5 min
   m11-corrupt       one damaged segment, playback around it         gateway       about 5 min
@@ -67,15 +69,15 @@ def plan(quick: bool, plug_off: str | None, plug_on: str | None) -> list[dict]:
         return f"{n(k)} {one if n(k) == 1 else many}"
     power = ["--plug-off", plug_off, "--plug-on", plug_on] if plug_off and plug_on else []
     return [
-        {"name": "m10-kill", "module": "M10", "what": f"Frigate killed {'once' if n(10) == 1 else f'{n(10)} times'}", "where": "gateway",
-         "script": "m10_recovery.py", "argv": ["kill", "--count", str(n(10))], "minutes": 2 * n(10)},
         {"name": "m10-disconnect", "module": "M10", "what": f"{count(5, 'camera disconnect', 'camera disconnects')} (PoE)", "where": "gateway",
          "script": "m10_recovery.py", "argv": ["disconnect", "--count", str(n(5))], "minutes": 3 * n(5)},
-        {"name": "m10-reboot", "module": "M10", "what": count(10, "gateway reboot", "gateway reboots"), "where": "workstation",
-         "script": "m10_recovery.py", "argv": ["reboot", "--count", str(n(10))], "minutes": 6 * n(10)},
         {"name": "m11-power", "module": "M11", "what": count(10, "power cut", "power cuts") + ("" if power else " (operator switches the power)"),
          "where": "workstation", "script": "m11_faults.py", "argv": ["power", "--count", str(n(10))] + power,
          "minutes": 6 * n(10)},
+        {"name": "m10-kill", "module": "M10", "what": f"Frigate killed {'once' if n(10) == 1 else f'{n(10)} times'}", "where": "gateway",
+         "script": "m10_recovery.py", "argv": ["kill", "--count", str(n(10))], "minutes": 2 * n(10)},
+        {"name": "m10-reboot", "module": "M10", "what": count(10, "gateway reboot", "gateway reboots"), "where": "workstation",
+         "script": "m10_recovery.py", "argv": ["reboot", "--count", str(n(10))], "minutes": 6 * n(10)},
         {"name": "m11-full-disk", "module": "M11", "what": "recording disk filled to its safe limit", "where": "gateway",
          "script": "m11_faults.py", "argv": ["full-disk"], "minutes": 15},
         {"name": "m11-missing-disk", "module": "M11", "what": "recording disk taken away and given back", "where": "gateway",

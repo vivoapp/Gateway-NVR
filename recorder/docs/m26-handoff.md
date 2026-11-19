@@ -12,15 +12,18 @@ passwordless sudo there, because two steps reboot or power-cycle the gateway.
 
 | Step | Module | What | Runs on | Time |
 |---|---|---|---|---|
-| m10-kill | M10 | Frigate killed 10 times | gateway | about 20 min |
 | m10-disconnect | M10 | 5 camera disconnects through the PoE switch | gateway | about 15 min |
-| m10-reboot | M10 | 10 gateway reboots | workstation | about 1 h |
 | m11-power | M11 | 10 power cuts with the smart plug | workstation | about 1 h |
+| m10-kill | M10 | Frigate killed 10 times | gateway | about 20 min |
+| m10-reboot | M10 | 10 gateway reboots | workstation | about 1 h |
 | m11-full-disk | M11 | recording disk filled to its safe limit | gateway | about 15 min |
 | m11-missing-disk | M11 | recording disk taken away and given back | gateway | about 5 min |
 | m11-corrupt | M11 | one damaged segment, playback around it | gateway | about 5 min |
 | m12-integrity | M12 | every segment recorded since the matrix began | gateway | about 15 min |
 | whole window | M10-M12 | no recording gap outside the steps above | gateway | 1 min |
+
+The two steps that may need someone on site (pulling camera cables, switching the power) come
+first, so that person is needed for one block of about 1 h 20 min at the start of the run.
 
 With 5 minutes between steps, a full run takes about 4 hours; `--quick` (one event of each kind)
 about 1.5 hours.

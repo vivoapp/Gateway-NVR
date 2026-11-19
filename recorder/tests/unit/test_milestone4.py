@@ -132,7 +132,7 @@ class Matrix(unittest.TestCase):
     def test_plan_counts(self):
         full = {s["name"]: s for s in m26.plan(False, None, None)}
         quick = {s["name"]: s for s in m26.plan(True, "off", "on")}
-        self.assertEqual(list(full), ["m10-kill", "m10-disconnect", "m10-reboot", "m11-power", "m11-full-disk",
+        self.assertEqual(list(full), ["m10-disconnect", "m11-power", "m10-kill", "m10-reboot", "m11-full-disk",
                                       "m11-missing-disk", "m11-corrupt", "m12-integrity"])
         self.assertEqual(full["m10-kill"]["argv"], ["kill", "--count", "10"])
         self.assertEqual(full["m10-reboot"]["argv"], ["reboot", "--count", "10"])
