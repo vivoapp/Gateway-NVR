@@ -246,6 +246,27 @@ def test_pruning_keeps_everything_that_is_not_finished(cfg, s3, new_service, clo
     assert svc.store.get(seg_key("cam01", 3)) is None
 
 
+def test_pruning_keeps_a_row_that_changed_after_it_was_chosen(cfg, s3, new_service, clock):
+    """Review: the lock is free between choosing the rows and deleting them. A row that went back to
+    'pending' in that gap must not be deleted."""
+    cfg.state_keep_days = 1
+    svc = upload_n(cfg, new_service, clock, 3)
+    clock.advance(10 * DAY)
+    store = svc.store
+    changed = seg_key("cam01", 1)
+    real_forget = store._forget
+
+    def change_then_forget(keys, before):
+        store._exec("UPDATE segments SET state='pending' WHERE key=?", (changed,))   # the race
+        return real_forget(keys, before)
+
+    store._forget = change_then_forget
+    gone = store.prune(svc.clock() - DAY)
+    assert changed not in gone and len(gone) == 2             # only the two that were still finished
+    assert store.get(changed)["state"] == "pending"           # kept
+    assert store.counts() == {"pending": 1}
+
+
 def test_state_keep_days_zero_never_forgets(cfg, s3, new_service, clock):
     cfg.state_keep_days = 0
     svc = upload_n(cfg, new_service, clock, 2)

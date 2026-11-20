@@ -23,8 +23,8 @@ bucket and the filled `/etc/vivo/cloud.env`; see "Still to do" at the end.
 ## 2. Automated tests
 
 `./run.sh test` (Docker, with the real MinIO): last run on the PC on 29 October **130 passed, none skipped**.
-After step 10 (the code-review fixes, section 7) the package has 156 tests: 153 pass here without Docker and
-3 (the real-MinIO ones) are skipped; run `./run.sh test` once more after replacing the folder and expect 156 passed.
+After step 11 (section 6) the package has 157 tests: 154 pass here without Docker and
+3 (the real-MinIO ones) are skipped; run `./run.sh test` once more after replacing the files and expect 157 passed.
 The test files and what each covers are listed in `README.md`.
 
 ## 3. M19 acceptance run on the PC
@@ -142,6 +142,12 @@ A second developer read the code (31 October) and listed nine findings. Each rea
 After step 10 the 18 recovery tests were run again with `--quick` (18 of 18 passed, with the new check "nothing stuck"
 after every test). The full 45-minute run of 29 October was made before step 10; run `./test.sh recovery` once more on
 the PC if Vivo wants the full run on the final code.
+
+### Review of the pull request (20 November, step 11)
+
+Vivo's reviewer found no blockers and two small fixes, both done: `prune()` now checks each row again when it deletes
+it (new test, which fails without the fix), and `.test/` is ignored in `cloud/uploader/.gitignore`. Result:
+154 passed, 3 skipped (real MinIO) without Docker.
 
 ## 7. Still to do
 

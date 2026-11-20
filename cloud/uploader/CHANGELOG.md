@@ -2,6 +2,17 @@
 
 ## Unreleased (M19 and M20 work, built on the technical evaluation uploader)
 
+### Step 11: two fixes from Vivo's review of the pull request (20 November)
+- **`store.prune()`:** the rows were chosen, the lock was released, and then they were deleted without a second
+  look. A row that went back to `pending` in that gap would have been deleted. The delete now checks every row
+  again (state `uploaded`, index record handed over, old enough) in the same locked step, and `prune()` returns only
+  the keys that were really deleted. New test: `test_pruning_keeps_a_row_that_changed_after_it_was_chosen`
+  (it fails without the fix).
+- **`.gitignore`:** `.test/` is now ignored in `cloud/uploader/` too, not only in `deploy/`, so test credentials
+  made from another folder cannot be committed by mistake.
+- Not changed (minor, noted by the reviewer): `_file_failures` keeps the count of a stuck segment until the next
+  restart. It only holds stuck segments, so it stays small.
+
 ### Step 10: fixes from the code review
 A second developer read the code and listed nine findings (`Haris_Scope_Status.xlsx`, sheet "Code Review"). All
 real ones are fixed, each with tests (`tests/test_step10.py`, `tests/test_gaps.py`).

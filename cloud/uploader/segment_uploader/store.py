@@ -175,18 +175,33 @@ class Store:
         Only rows that are finished are removed: uploaded and their index record handed over (or given
         up). Anything waiting, stuck or with an index record still to send is kept. Done in slices so
         the write lock is held briefly; the caller repeats while a full slice comes back.
+
+        The rows are chosen first and removed afterwards, and the lock is free in between. So the
+        removal checks every row again (`_forget`): a row that changed in the meantime is kept.
         """
         with self._lock:
             keys = [r["key"] for r in self._db.execute(
                 "SELECT key FROM segments WHERE state=? AND index_sent!=0 AND uploaded_at<? LIMIT ?",
                 (UPLOADED, uploaded_before, limit))]
+        return self._forget(keys, uploaded_before)
+
+    def _forget(self, keys: list[str], uploaded_before: float) -> list[str]:
+        """Delete these rows, but only those that are still finished. Returns the keys really deleted."""
+        deleted: list[str] = []
         for i in range(0, len(keys), 500):
             chunk = keys[i:i + 500]
-            self._exec(f"DELETE FROM segments WHERE key IN ({','.join('?' * len(chunk))})", tuple(chunk))
-        if keys and not self._in_bulk:
-            with self._lock:
-                self._db.commit()
-        return keys
+            marks = ",".join("?" * len(chunk))
+            finished = "state=? AND index_sent!=0 AND uploaded_at<?"
+            with self._lock, self._db:           # check and delete in one step, one transaction
+                still = [r["key"] for r in self._db.execute(
+                    f"SELECT key FROM segments WHERE key IN ({marks}) AND {finished}",
+                    (*chunk, UPLOADED, uploaded_before))]
+                if still:
+                    marks = ",".join("?" * len(still))
+                    self._db.execute(f"DELETE FROM segments WHERE key IN ({marks}) AND {finished}",
+                                     (*still, UPLOADED, uploaded_before))
+                deleted.extend(still)
+        return deleted
 
     def mark_index_skipped(self, key: str) -> None:
         """Give up on one record that can never be emitted, so it does not block the ones behind it."""
