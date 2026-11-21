@@ -10,7 +10,8 @@ M9 retention, Milestone 3 (Resilience and monitoring): M10 restart recovery, M11
 faults, M12 integrity QA, M22 health telemetry, and Milestone 4 (Acceptance and handoff): M25 load
 and resource acceptance, M26 fault-simulation matrix and handoff. Later milestones build on it.
 
-- Deploy a gateway from a blank machine: docs/deploy.md
+- Deploy a gateway from a blank machine, then check, troubleshoot and recover it (the runbook):
+  docs/deploy.md
 - Known limitations and what to do next: docs/known-limitations.md
 
 ## Layout

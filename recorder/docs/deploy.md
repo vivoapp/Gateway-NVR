@@ -5,6 +5,9 @@ stream recorded by Frigate, its substream saved for the cloud uploader, retentio
 limit enforced, and the health endpoint running. Allow about 1.5 hours, plus the time to set up the
 cameras. Everything runs from this folder (`recorder/` in the Vivo repository).
 
+This page is also the gateway's runbook: install (steps 1 to 8), check health (steps 9 to 11),
+troubleshoot (step 12) and recover (step 13).
+
 ## 1. What you need
 
 - **Gateway:** Intel N100 or N150 mini-PC, 16 GB RAM, an OS disk, and a recording SSD (2 TB for
@@ -193,3 +196,49 @@ docs/m25-load.md and docs/m26-handoff.md explain each one, and README.md lists e
 | Health shows `disk_missing`, recorder stopped | the recording disk is gone | check the disk and its cable; when it is back, `vivo-disk-watch` starts the recorder within 30 s |
 | Health shows `disk_near_limit` | the scenes record more than planned | the storage guard deletes the oldest footage; plan a bigger disk or shorter retention (docs/m8-storage.md) |
 | Health shows `recording_gap` for one camera | that camera's recorder stalled | Frigate restarts it within about 2 minutes (docs/findings.md F2); if not, `sudo systemctl restart vivo-gateway` |
+| Health shows `camera_offline` for every camera at once, for one poll | the health service could not read go2rtc's stream list within 5 s (docs/known-limitations.md, 13) | nothing, if the next poll is clear and no `recording_gap` follows; if it stays, `sudo vivo-compose logs go2rtc`, then `sudo systemctl restart vivo-gateway` |
+| Health shows `recorder_down` or `container_down` | Frigate or another container stopped | Docker restarts it on its own; if it stays, `sudo vivo-compose ps` and the logs, then `sudo systemctl restart vivo-gateway` |
+| Health shows `clock_not_synced` | chrony cannot reach its NTP servers | recordings are named by the gateway's clock: check the internet link and `NTP_SERVERS` in site.env, then `chronyc tracking` |
+| Health shows `ssd_health` | SMART or ext4 reports errors on a disk | `sudo vivo-disk` shows which disk; plan to replace it (step 13) |
+| Health shows `early_deletion` | the safe limit deleted substream segments before the substream retention ended | the uploader may not have sent them; tell its owner, and plan a bigger disk or shorter retention |
+| Health shows `high_temperature` | the CPU is at 80 °C or more | give the gateway air and check its fan; M25 measured at most 60 °C at 10 cameras |
+
+## 13. Recover
+
+What the gateway does on its own after each fault, as measured in the M26 fault matrix
+(docs/milestone-4-results.md), and what to do when it does not. Nobody needs to log in for any of
+these to recover.
+
+| After | What happens on its own | Measured | If it does not come back |
+|---|---|---|---|
+| A power cut | The gateway switches itself on (BIOS, step 2). Before the recorder starts, empty segments the cut left are removed; once Frigate is up, broken ones are taken out of its index. Up to about 25 s of main stream and 65 s of substream from before the cut are lost | recording back within 34 s of power on (10 cuts) | the gateway stays off: set the BIOS (step 2). It is on but not recording: the rows below |
+| A reboot | everything starts by itself | recording back within about 60 s (10 reboots) | `systemctl status vivo-gateway vivo-health`, then `sudo vivo-compose logs frigate` |
+| Frigate or another container crashes | Docker restarts it | main stream back within 8 s (10 kills) | `sudo systemctl restart vivo-gateway` |
+| A camera drops off the network | its recording resumes when it answers again | within 20 s of the camera's power coming back (5 disconnects); after a drop shorter than 10 s the main stream can take up to about 2 minutes (docs/findings.md F2) | after 3 minutes: check the camera at `http://<gateway>:1984`, then `sudo systemctl restart vivo-gateway` |
+| The recording disk goes away | the recorder stops and nothing is written to the OS disk (health: `disk_missing`); when the disk is back, `vivo-disk-watch` mounts it and starts the recorder | recording back 25 s after the disk returned | `sudo vivo-disk`, `journalctl -u vivo-disk-watch`; check that no `/etc/vivo/maintenance` was left behind |
+| The recording disk fills up | the storage guard deletes the oldest hours first, with no recording gap | | `disk_near_limit` in step 12 |
+| A damaged segment | playback and clips go on around it; M12 lists it | | nothing to do |
+
+Once it is back, the health endpoint shows no alerts, and after 15 minutes
+`cd /opt/vivo-gateway && sudo tests/m7_check.py` passes.
+
+### Replace the recording disk
+
+For a separate recording SSD. Not yet done on the reference gateway.
+
+1. `sudo touch /etc/vivo/maintenance`, then `sudo poweroff`.
+2. Swap the disk and switch the gateway on. It boots without the old disk (its fstab line has
+   `nofail`). The recordings on the old disk are lost.
+3. From `~/recorder`, find the new disk with `lsblk -o NAME,SIZE,MODEL,SERIAL,MOUNTPOINT`, then run
+   `sudo gateway/setup.sh --dry-run --format-disk /dev/sdX` and the same without `--dry-run`. It
+   erases the new disk, puts its UUID in fstab in place of the old one, and starts the recorder.
+4. `sudo rm /etc/vivo/maintenance`, then the checks in step 9.
+
+On the reference gateway's layout, one LVM volume across both disks (docs/findings.md F4), losing
+either disk loses the whole volume; rebuilding it is not covered here.
+
+### Replace the whole gateway
+
+Follow steps 1 to 8 on the new machine with the site's committed `cameras.yaml` and site file
+(`gateway/sites/<name>.site.env`), and the passwords kept outside Git (secrets.env is never
+committed). The old gateway's recordings stay on its own disk.

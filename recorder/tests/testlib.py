@@ -205,7 +205,7 @@ def analyze(events: list[dict], cams: list[str], limits: dict, planned: list[tup
 
 def gap_table(gaps: list[dict]) -> list[str]:
     lines = ["| Camera | Stream | Gap start (UTC) | End | Length | Cause |", "|---|---|---|---|---|---|"]
-    lines += [f"| {g['camera']} | {g['stream']} | {vivo.utc(g['start'])} | {vivo.utc(g['end'])[11:]} | "
+    lines += [f"| {g['camera']} | {g['stream']} | {vivo.utc(g['start'])} | {vivo.utc_end(g['start'], g['end'])} | "
               f"{g['length']:.1f} s | {g['cause'] if g['cause'] != 'UNEXPLAINED' else '**unexplained**'} |" for g in gaps]
     return lines if gaps else ["No gaps."]
 

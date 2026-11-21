@@ -385,7 +385,7 @@ def report(a, results: list[dict], whole: dict | None, stopped: str, pre: list) 
                "first step to the end of the last; each belongs to the step whose window holds it.", ""]
         md += testlib.gap_table(whole["gaps"])
     md += ["", "## Step windows (gateway clock)", "", "| Step | From (UTC) | To | Exit code |", "|---|---|---|---|"]
-    md += [f"| {r['name']} | {vivo.utc(r['start'])} | {vivo.utc(r['end'])[11:]} | {r['exit']} |" for r in results]
+    md += [f"| {r['name']} | {vivo.utc(r['start'])} | {vivo.utc_end(r['start'], r['end'])} | {r['exit']} |" for r in results]
     md += ["", "Each step's own report (reports/ on the gateway) has its details and gap log. Step logs: "
            "reports/m26-<time>/ on the gateway."]
     return "\n".join(md) + "\n"

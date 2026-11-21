@@ -1,0 +1,1491 @@
+Test matrix on vivo-n150: 8 steps, about 3.9 hours. Recording stops during most of them.
+  1. m10-disconnect    M10  5 camera disconnects (PoE)                       gateway
+  2. m11-power         M11  10 power cuts (operator switches the power)      workstation
+  3. m10-kill          M10  Frigate killed 10 times                          gateway
+  4. m10-reboot        M10  10 gateway reboots                               workstation
+  5. m11-full-disk     M11  recording disk filled to its safe limit          gateway
+  6. m11-missing-disk  M11  recording disk taken away and given back         gateway
+  7. m11-corrupt       M11  one damaged segment, playback around it          gateway
+  8. m12-integrity     M12  every segment since the matrix began             gateway
+
+preflight:
+  PASS  SSH to vivo-n150 with a key  
+  PASS  passwordless sudo on the gateway  
+  PASS  test scripts installed in /opt/vivo-gateway/tests  
+  PASS  vivo-gateway, vivo-health and vivo-disk-watch.timer active  active active active
+  PASS  every camera records both streams  
+  PASS  clocks  gateway +1.4 s from this workstation (event times use the gateway's clock)
+  PASS  PoE control for m10-disconnect  POE_BACKEND=manual: an operator on site unplugs each camera when asked
+  PASS  recording disk on LVM (m11-missing-disk switches its volume off)  /dev/ubuntu-vg/vivo-media
+
+=== m10-disconnect: 5 camera disconnects (PoE) (gateway)
+Pseudo-terminal will not be allocated because stdin is not a terminal.
+>>> UNPLUG camera cam01 (VIVO-CAM-01), then press Enter >>> PLUG IN camera cam01 (VIVO-CAM-01), then press Enter disconnect 1/5: cam01 off 2026-11-20 13:01:29 UTC, on 2026-11-20 13:02:58 UTC
+>>> UNPLUG camera cam02 (VIVO-CAM-02), then press Enter >>> PLUG IN camera cam02 (VIVO-CAM-02), then press Enter disconnect 2/5: cam02 off 2026-11-20 13:04:38 UTC, on 2026-11-20 13:05:38 UTC
+>>> UNPLUG camera cam03 (VIVO-CAM-03), then press Enter >>> PLUG IN camera cam03 (VIVO-CAM-03), then press Enter disconnect 3/5: cam03 off 2026-11-20 13:06:57 UTC, on 2026-11-20 13:07:48 UTC
+>>> UNPLUG camera cam04 (VIVO-CAM-04), then press Enter >>> PLUG IN camera cam04 (VIVO-CAM-04), then press Enter disconnect 4/5: cam04 off 2026-11-20 13:09:21 UTC, on 2026-11-20 13:10:08 UTC
+>>> UNPLUG camera cam05 (VIVO-CAM-05), then press Enter >>> PLUG IN camera cam05 (VIVO-CAM-05), then press Enter disconnect 5/5: cam05 off 2026-11-20 13:11:39 UTC, on 2026-11-20 13:12:39 UTC
+PASS  disconnect: recording back on its own after every one of 5 events (limit 120 s)  slowest main stream 20 s, substream 38 s
+PASS  no unexplained gap in the log  11 gaps, 0 unexplained
+report: /opt/vivo-gateway/reports/m10-recovery-20261120-131503.md
+=== m10-disconnect: PASS 2/2
+
+settling 300 s before the next step
+
+=== m11-power: 10 power cuts (operator switches the power) (workstation)
+>>> switch the gateway's power OFF now, then press Enter >>> switch the gateway's power ON now, then press Enter power cut 1/10 at 2026-11-20 13:20:32 UTC, power on 2026-11-20 13:29:40 UTC, SSH back after 3 s
+>>> switch the gateway's power OFF now, then press Enter >>> switch the gateway's power ON now, then press Enter power cut 2/10 at 2026-11-20 13:31:50 UTC, power on 2026-11-20 13:32:54 UTC, SSH back after 4 s
+>>> switch the gateway's power OFF now, then press Enter >>> switch the gateway's power ON now, then press Enter power cut 3/10 at 2026-11-20 13:35:30 UTC, power on 2026-11-20 13:36:48 UTC, SSH back after 4 s
+>>> switch the gateway's power OFF now, then press Enter >>> switch the gateway's power ON now, then press Enter power cut 4/10 at 2026-11-20 13:39:12 UTC, power on 2026-11-20 13:40:06 UTC, SSH back after 15 s
+>>> switch the gateway's power OFF now, then press Enter >>> switch the gateway's power ON now, then press Enter power cut 5/10 at 2026-11-20 13:43:09 UTC, power on 2026-11-20 13:44:30 UTC, SSH back after 12 s
+>>> switch the gateway's power OFF now, then press Enter >>> switch the gateway's power ON now, then press Enter power cut 6/10 at 2026-11-20 13:47:15 UTC, power on 2026-11-20 13:48:34 UTC, SSH back after 12 s
+>>> switch the gateway's power OFF now, then press Enter >>> switch the gateway's power ON now, then press Enter power cut 7/10 at 2026-11-20 13:51:19 UTC, power on 2026-11-20 13:52:16 UTC, SSH back after 13 s
+>>> switch the gateway's power OFF now, then press Enter >>> switch the gateway's power ON now, then press Enter power cut 8/10 at 2026-11-20 13:55:17 UTC, power on 2026-11-20 13:56:12 UTC, SSH back after 14 s
+>>> switch the gateway's power OFF now, then press Enter >>> switch the gateway's power ON now, then press Enter power cut 9/10 at 2026-11-20 13:59:14 UTC, power on 2026-11-20 14:00:15 UTC, SSH back after 12 s
+>>> switch the gateway's power OFF now, then press Enter >>> switch the gateway's power ON now, then press Enter power cut 10/10 at 2026-11-20 14:03:14 UTC, power on 2026-11-20 14:04:19 UTC, SSH back after 12 s
+PASS  boots and records again within 180 s of power coming back, every time  slowest main stream 21 s, substream 13 s after power on
+PASS  at most the segment being written is lost (main 25 s, substream 65 s)  lost before the cut: main up to 0 s, substream up to 29 s
+FAIL  no substream segment was finished across a power cut  cam01 2026-11-20 13:20:00 UTC, cam02 2026-11-20 13:20:03 UTC, cam03 2026-11-20 13:20:01 UTC, cam04 2026-11-20 13:20:00 UTC, cam05 2026-11-20 13:20:02 UTC
+PASS  recording filesystem: no errors logged by ext4  errors_count 0
+PASS  no unexplained gap  0 unexplained of 200
+PASS  Frigate's index lists no broken file near a cut (a clip or playback would stop there)  0 listed
+report: /opt/vivo-gateway/reports/m11-power-20261120-140737.md
+
+# M11 power-loss test
+
+10 power cuts (15 s off).
+
+Result: **5 passed, 1 failed**
+
+| Result | Check | Detail |
+|---|---|---|
+| PASS | boots and records again within 180 s of power coming back, every time | slowest main stream 21 s, substream 13 s after power on |
+| PASS | at most the segment being written is lost (main 25 s, substream 65 s) | lost before the cut: main up to 0 s, substream up to 29 s |
+| **FAIL** | no substream segment was finished across a power cut | cam01 2026-11-20 13:20:00 UTC, cam02 2026-11-20 13:20:03 UTC, cam03 2026-11-20 13:20:01 UTC, cam04 2026-11-20 13:20:00 UTC, cam05 2026-11-20 13:20:02 UTC |
+| PASS | recording filesystem: no errors logged by ext4 | errors_count 0 |
+| PASS | no unexplained gap | 0 unexplained of 200 |
+| PASS | Frigate's index lists no broken file near a cut (a clip or playback would stop there) | 0 listed |
+
+## Per cut and camera
+
+| Cut | Camera | Cut at (UTC) | Main back after power on | Substream back | Main lost before the cut | Substream lost | Result |
+|---|---|---|---|---|---|---|---|
+| power 1 | cam01 | 2026-11-20 13:20:32 UTC | -346 s | -362 s | 0 s | 0 s | PASS |
+| power 1 | cam02 | 2026-11-20 13:20:32 UTC | -346 s | -362 s | 0 s | 0 s | PASS |
+| power 1 | cam03 | 2026-11-20 13:20:32 UTC | -345 s | -362 s | 0 s | 0 s | PASS |
+| power 1 | cam04 | 2026-11-20 13:20:32 UTC | -345 s | -362 s | 0 s | 0 s | PASS |
+| power 1 | cam05 | 2026-11-20 13:20:32 UTC | -345 s | -362 s | 0 s | 0 s | PASS |
+| power 1 | cam06 | 2026-11-20 13:20:32 UTC | -345 s | -363 s | 0 s | 0 s | PASS |
+| power 1 | cam07 | 2026-11-20 13:20:32 UTC | -345 s | -363 s | 0 s | 0 s | PASS |
+| power 1 | cam08 | 2026-11-20 13:20:32 UTC | -345 s | -363 s | 0 s | 0 s | PASS |
+| power 1 | cam09 | 2026-11-20 13:20:32 UTC | -345 s | -363 s | 0 s | 0 s | PASS |
+| power 1 | cam10 | 2026-11-20 13:20:32 UTC | -345 s | -363 s | 0 s | 0 s | PASS |
+| power 2 | cam01 | 2026-11-20 13:31:50 UTC | 9 s | 2 s | 0 s | 0 s | PASS |
+| power 2 | cam02 | 2026-11-20 13:31:50 UTC | 10 s | 2 s | 0 s | 0 s | PASS |
+| power 2 | cam03 | 2026-11-20 13:31:50 UTC | 10 s | 2 s | 0 s | 0 s | PASS |
+| power 2 | cam04 | 2026-11-20 13:31:50 UTC | 10 s | 2 s | 0 s | 0 s | PASS |
+| power 2 | cam05 | 2026-11-20 13:31:50 UTC | 10 s | 2 s | 0 s | 0 s | PASS |
+| power 2 | cam06 | 2026-11-20 13:31:50 UTC | 10 s | 2 s | 0 s | 0 s | PASS |
+| power 2 | cam07 | 2026-11-20 13:31:50 UTC | 10 s | 2 s | 0 s | 0 s | PASS |
+| power 2 | cam08 | 2026-11-20 13:31:50 UTC | 10 s | 2 s | 0 s | 0 s | PASS |
+| power 2 | cam09 | 2026-11-20 13:31:50 UTC | 10 s | 2 s | 0 s | 0 s | PASS |
+| power 2 | cam10 | 2026-11-20 13:31:50 UTC | 10 s | 2 s | 0 s | 0 s | PASS |
+| power 3 | cam01 | 2026-11-20 13:35:30 UTC | -7 s | -14 s | 0 s | 27 s | PASS |
+| power 3 | cam02 | 2026-11-20 13:35:30 UTC | -7 s | -11 s | 0 s | 27 s | PASS |
+| power 3 | cam03 | 2026-11-20 13:35:30 UTC | -7 s | -14 s | 0 s | 27 s | PASS |
+| power 3 | cam04 | 2026-11-20 13:35:30 UTC | -7 s | -14 s | 0 s | 28 s | PASS |
+| power 3 | cam05 | 2026-11-20 13:35:30 UTC | -6 s | -14 s | 0 s | 27 s | PASS |
+| power 3 | cam06 | 2026-11-20 13:35:30 UTC | -6 s | -14 s | 0 s | 29 s | PASS |
+| power 3 | cam07 | 2026-11-20 13:35:30 UTC | -6 s | -14 s | 0 s | 29 s | PASS |
+| power 3 | cam08 | 2026-11-20 13:35:30 UTC | -6 s | -14 s | 0 s | 29 s | PASS |
+| power 3 | cam09 | 2026-11-20 13:35:30 UTC | -6 s | -14 s | 0 s | 29 s | PASS |
+| power 3 | cam10 | 2026-11-20 13:35:30 UTC | -6 s | -14 s | 0 s | 29 s | PASS |
+| power 4 | cam01 | 2026-11-20 13:39:12 UTC | 20 s | 13 s | 0 s | 10 s | PASS |
+| power 4 | cam02 | 2026-11-20 13:39:12 UTC | 21 s | 13 s | 0 s | 10 s | PASS |
+| power 4 | cam03 | 2026-11-20 13:39:12 UTC | 21 s | 13 s | 0 s | 10 s | PASS |
+| power 4 | cam04 | 2026-11-20 13:39:12 UTC | 21 s | 13 s | 0 s | 10 s | PASS |
+| power 4 | cam05 | 2026-11-20 13:39:12 UTC | 21 s | 13 s | 0 s | 10 s | PASS |
+| power 4 | cam06 | 2026-11-20 13:39:12 UTC | 21 s | 13 s | 0 s | 12 s | PASS |
+| power 4 | cam07 | 2026-11-20 13:39:12 UTC | 21 s | 13 s | 0 s | 11 s | PASS |
+| power 4 | cam08 | 2026-11-20 13:39:12 UTC | 21 s | 13 s | 0 s | 12 s | PASS |
+| power 4 | cam09 | 2026-11-20 13:39:12 UTC | 21 s | 13 s | 0 s | 12 s | PASS |
+| power 4 | cam10 | 2026-11-20 13:39:12 UTC | 21 s | 13 s | 0 s | 12 s | PASS |
+| power 5 | cam01 | 2026-11-20 13:43:09 UTC | 18 s | 10 s | 0 s | 6 s | PASS |
+| power 5 | cam02 | 2026-11-20 13:43:09 UTC | 18 s | 10 s | 0 s | 6 s | PASS |
+| power 5 | cam03 | 2026-11-20 13:43:09 UTC | 18 s | 10 s | 0 s | 6 s | PASS |
+| power 5 | cam04 | 2026-11-20 13:43:09 UTC | 19 s | 10 s | 0 s | 6 s | PASS |
+| power 5 | cam05 | 2026-11-20 13:43:09 UTC | 19 s | 10 s | 0 s | 6 s | PASS |
+| power 5 | cam06 | 2026-11-20 13:43:09 UTC | 19 s | 10 s | 0 s | 7 s | PASS |
+| power 5 | cam07 | 2026-11-20 13:43:09 UTC | 19 s | 10 s | 0 s | 6 s | PASS |
+| power 5 | cam08 | 2026-11-20 13:43:09 UTC | 19 s | 10 s | 0 s | 7 s | PASS |
+| power 5 | cam09 | 2026-11-20 13:43:09 UTC | 19 s | 10 s | 0 s | 6 s | PASS |
+| power 5 | cam10 | 2026-11-20 13:43:09 UTC | 19 s | 10 s | 0 s | 6 s | PASS |
+| power 6 | cam01 | 2026-11-20 13:47:15 UTC | 16 s | 8 s | 0 s | 16 s | PASS |
+| power 6 | cam02 | 2026-11-20 13:47:15 UTC | 16 s | 8 s | 0 s | 16 s | PASS |
+| power 6 | cam03 | 2026-11-20 13:47:15 UTC | 16 s | 8 s | 0 s | 16 s | PASS |
+| power 6 | cam04 | 2026-11-20 13:47:15 UTC | 16 s | 8 s | 0 s | 16 s | PASS |
+| power 6 | cam05 | 2026-11-20 13:47:15 UTC | 16 s | 8 s | 0 s | 16 s | PASS |
+| power 6 | cam06 | 2026-11-20 13:47:15 UTC | 16 s | 8 s | 0 s | 13 s | PASS |
+| power 6 | cam07 | 2026-11-20 13:47:15 UTC | 16 s | 8 s | 0 s | 16 s | PASS |
+| power 6 | cam08 | 2026-11-20 13:47:15 UTC | 16 s | 8 s | 0 s | 13 s | PASS |
+| power 6 | cam09 | 2026-11-20 13:47:15 UTC | 16 s | 8 s | 0 s | 16 s | PASS |
+| power 6 | cam10 | 2026-11-20 13:47:15 UTC | 18 s | 8 s | 0 s | 16 s | PASS |
+| power 7 | cam01 | 2026-11-20 13:51:19 UTC | 18 s | 9 s | 0 s | 18 s | PASS |
+| power 7 | cam02 | 2026-11-20 13:51:19 UTC | 18 s | 10 s | 0 s | 16 s | PASS |
+| power 7 | cam03 | 2026-11-20 13:51:19 UTC | 18 s | 10 s | 0 s | 18 s | PASS |
+| power 7 | cam04 | 2026-11-20 13:51:19 UTC | 18 s | 10 s | 0 s | 18 s | PASS |
+| power 7 | cam05 | 2026-11-20 13:51:19 UTC | 18 s | 9 s | 0 s | 18 s | PASS |
+| power 7 | cam06 | 2026-11-20 13:51:19 UTC | 18 s | 9 s | 0 s | 18 s | PASS |
+| power 7 | cam07 | 2026-11-20 13:51:19 UTC | 18 s | 9 s | 0 s | 18 s | PASS |
+| power 7 | cam08 | 2026-11-20 13:51:19 UTC | 18 s | 9 s | 0 s | 18 s | PASS |
+| power 7 | cam09 | 2026-11-20 13:51:19 UTC | 18 s | 9 s | 0 s | 18 s | PASS |
+| power 7 | cam10 | 2026-11-20 13:51:19 UTC | 18 s | 9 s | 0 s | 18 s | PASS |
+| power 8 | cam01 | 2026-11-20 13:55:17 UTC | 20 s | 12 s | 0 s | 15 s | PASS |
+| power 8 | cam02 | 2026-11-20 13:55:17 UTC | 20 s | 12 s | 0 s | 15 s | PASS |
+| power 8 | cam03 | 2026-11-20 13:55:17 UTC | 21 s | 13 s | 0 s | 15 s | PASS |
+| power 8 | cam04 | 2026-11-20 13:55:17 UTC | 21 s | 13 s | 0 s | 15 s | PASS |
+| power 8 | cam05 | 2026-11-20 13:55:17 UTC | 21 s | 12 s | 0 s | 15 s | PASS |
+| power 8 | cam06 | 2026-11-20 13:55:17 UTC | 21 s | 12 s | 0 s | 14 s | PASS |
+| power 8 | cam07 | 2026-11-20 13:55:17 UTC | 21 s | 12 s | 0 s | 14 s | PASS |
+| power 8 | cam08 | 2026-11-20 13:55:17 UTC | 21 s | 12 s | 0 s | 15 s | PASS |
+| power 8 | cam09 | 2026-11-20 13:55:17 UTC | 21 s | 12 s | 0 s | 14 s | PASS |
+| power 8 | cam10 | 2026-11-20 13:55:17 UTC | 21 s | 12 s | 0 s | 14 s | PASS |
+| power 9 | cam01 | 2026-11-20 13:59:14 UTC | 17 s | 9 s | 0 s | 14 s | PASS |
+| power 9 | cam02 | 2026-11-20 13:59:14 UTC | 17 s | 9 s | 0 s | 14 s | PASS |
+| power 9 | cam03 | 2026-11-20 13:59:14 UTC | 17 s | 9 s | 0 s | 14 s | PASS |
+| power 9 | cam04 | 2026-11-20 13:59:14 UTC | 17 s | 9 s | 0 s | 14 s | PASS |
+| power 9 | cam05 | 2026-11-20 13:59:14 UTC | 18 s | 9 s | 0 s | 14 s | PASS |
+| power 9 | cam06 | 2026-11-20 13:59:14 UTC | 17 s | 9 s | 0 s | 12 s | PASS |
+| power 9 | cam07 | 2026-11-20 13:59:14 UTC | 18 s | 9 s | 0 s | 14 s | PASS |
+| power 9 | cam08 | 2026-11-20 13:59:14 UTC | 18 s | 9 s | 0 s | 12 s | PASS |
+| power 9 | cam09 | 2026-11-20 13:59:14 UTC | 18 s | 9 s | 0 s | 14 s | PASS |
+| power 9 | cam10 | 2026-11-20 13:59:14 UTC | 18 s | 9 s | 0 s | 14 s | PASS |
+| power 10 | cam01 | 2026-11-20 14:03:14 UTC | 14 s | 6 s | 0 s | 11 s | PASS |
+| power 10 | cam02 | 2026-11-20 14:03:14 UTC | 14 s | 6 s | 0 s | 11 s | PASS |
+| power 10 | cam03 | 2026-11-20 14:03:14 UTC | 14 s | 6 s | 0 s | 11 s | PASS |
+| power 10 | cam04 | 2026-11-20 14:03:14 UTC | 14 s | 6 s | 0 s | 11 s | PASS |
+| power 10 | cam05 | 2026-11-20 14:03:14 UTC | 14 s | 6 s | 0 s | 11 s | PASS |
+| power 10 | cam06 | 2026-11-20 14:03:14 UTC | 14 s | 6 s | 0 s | 14 s | PASS |
+| power 10 | cam07 | 2026-11-20 14:03:14 UTC | 15 s | 6 s | 0 s | 14 s | PASS |
+| power 10 | cam08 | 2026-11-20 14:03:14 UTC | 15 s | 6 s | 0 s | 14 s | PASS |
+| power 10 | cam09 | 2026-11-20 14:03:14 UTC | 15 s | 6 s | 0 s | 14 s | PASS |
+| power 10 | cam10 | 2026-11-20 14:03:14 UTC | 15 s | 6 s | 0 s | 14 s | PASS |
+
+## Damaged files near a cut
+
+Files from the 2 minutes before each cut that are listed but do not play; they count as lost above.
+
+None.
+
+## Gap log
+
+| Camera | Stream | Gap start (UTC) | End | Length | Cause |
+|---|---|---|---|---|---|
+| cam01 | main | 2026-11-20 13:22:29 UTC | 13:23:55 UTC | 85.0 s | power 1 |
+| cam01 | main | 2026-11-20 13:31:55 UTC | 13:33:03 UTC | 68.0 s | power 2 |
+| cam01 | main | 2026-11-20 13:35:35 UTC | 13:36:42 UTC | 67.0 s | power 3 |
+| cam01 | main | 2026-11-20 13:39:22 UTC | 13:40:27 UTC | 65.0 s | power 4 |
+| cam01 | main | 2026-11-20 13:43:27 UTC | 13:44:48 UTC | 81.0 s | power 5 |
+| cam01 | main | 2026-11-20 13:47:40 UTC | 13:48:51 UTC | 71.0 s | power 6 |
+| cam01 | main | 2026-11-20 13:51:29 UTC | 13:52:35 UTC | 65.0 s | power 7 |
+| cam01 | main | 2026-11-20 13:55:26 UTC | 13:56:33 UTC | 67.0 s | power 8 |
+| cam01 | main | 2026-11-20 13:59:25 UTC | 14:00:32 UTC | 67.0 s | power 9 |
+| cam01 | main | 2026-11-20 14:03:23 UTC | 14:04:33 UTC | 70.0 s | power 10 |
+| cam01 | substream | 2026-11-20 13:22:00 UTC | 13:23:39 UTC | 99.0 s | power 1 |
+| cam01 | substream | 2026-11-20 13:32:01 UTC | 13:32:56 UTC | 55.0 s | power 2 |
+| cam01 | substream | 2026-11-20 13:35:03 UTC | 13:36:35 UTC | 92.0 s | power 3 |
+| cam01 | substream | 2026-11-20 13:39:02 UTC | 13:40:20 UTC | 78.0 s | power 4 |
+| cam01 | substream | 2026-11-20 13:43:03 UTC | 13:44:40 UTC | 97.0 s | power 5 |
+| cam01 | substream | 2026-11-20 13:47:00 UTC | 13:48:43 UTC | 103.0 s | power 6 |
+| cam01 | substream | 2026-11-20 13:51:02 UTC | 13:52:26 UTC | 84.0 s | power 7 |
+| cam01 | substream | 2026-11-20 13:55:02 UTC | 13:56:25 UTC | 83.0 s | power 8 |
+| cam01 | substream | 2026-11-20 13:59:01 UTC | 14:00:24 UTC | 83.0 s | power 9 |
+| cam01 | substream | 2026-11-20 14:03:03 UTC | 14:04:25 UTC | 82.0 s | power 10 |
+| cam02 | main | 2026-11-20 13:22:23 UTC | 13:23:55 UTC | 92.0 s | power 1 |
+| cam02 | main | 2026-11-20 13:31:55 UTC | 13:33:04 UTC | 69.0 s | power 2 |
+| cam02 | main | 2026-11-20 13:35:35 UTC | 13:36:42 UTC | 67.0 s | power 3 |
+| cam02 | main | 2026-11-20 13:39:22 UTC | 13:40:28 UTC | 66.0 s | power 4 |
+| cam02 | main | 2026-11-20 13:43:27 UTC | 13:44:48 UTC | 81.0 s | power 5 |
+| cam02 | main | 2026-11-20 13:47:40 UTC | 13:48:51 UTC | 71.0 s | power 6 |
+| cam02 | main | 2026-11-20 13:51:30 UTC | 13:52:35 UTC | 65.0 s | power 7 |
+| cam02 | main | 2026-11-20 13:55:26 UTC | 13:56:33 UTC | 67.0 s | power 8 |
+| cam02 | main | 2026-11-20 13:59:25 UTC | 14:00:32 UTC | 67.0 s | power 9 |
+| cam02 | main | 2026-11-20 14:03:23 UTC | 14:04:33 UTC | 70.0 s | power 10 |
+| cam02 | substream | 2026-11-20 13:22:03 UTC | 13:23:39 UTC | 96.0 s | power 1 |
+| cam02 | substream | 2026-11-20 13:32:01 UTC | 13:32:56 UTC | 55.0 s | power 2 |
+| cam02 | substream | 2026-11-20 13:35:03 UTC | 13:36:38 UTC | 95.0 s | power 3 |
+| cam02 | substream | 2026-11-20 13:39:02 UTC | 13:40:20 UTC | 78.0 s | power 4 |
+| cam02 | substream | 2026-11-20 13:43:03 UTC | 13:44:40 UTC | 97.0 s | power 5 |
+| cam02 | substream | 2026-11-20 13:47:00 UTC | 13:48:43 UTC | 103.0 s | power 6 |
+| cam02 | substream | 2026-11-20 13:51:03 UTC | 13:52:27 UTC | 84.0 s | power 7 |
+| cam02 | substream | 2026-11-20 13:55:02 UTC | 13:56:25 UTC | 83.0 s | power 8 |
+| cam02 | substream | 2026-11-20 13:59:01 UTC | 14:00:24 UTC | 83.0 s | power 9 |
+| cam02 | substream | 2026-11-20 14:03:03 UTC | 14:04:25 UTC | 82.0 s | power 10 |
+| cam03 | main | 2026-11-20 13:22:25 UTC | 13:23:56 UTC | 91.0 s | power 1 |
+| cam03 | main | 2026-11-20 13:31:55 UTC | 13:33:04 UTC | 69.0 s | power 2 |
+| cam03 | main | 2026-11-20 13:35:34 UTC | 13:36:42 UTC | 67.0 s | power 3 |
+| cam03 | main | 2026-11-20 13:39:22 UTC | 13:40:28 UTC | 66.0 s | power 4 |
+| cam03 | main | 2026-11-20 13:43:27 UTC | 13:44:48 UTC | 81.0 s | power 5 |
+| cam03 | main | 2026-11-20 13:47:40 UTC | 13:48:51 UTC | 71.0 s | power 6 |
+| cam03 | main | 2026-11-20 13:51:30 UTC | 13:52:35 UTC | 65.0 s | power 7 |
+| cam03 | main | 2026-11-20 13:55:26 UTC | 13:56:34 UTC | 68.0 s | power 8 |
+| cam03 | main | 2026-11-20 13:59:24 UTC | 14:00:32 UTC | 67.0 s | power 9 |
+| cam03 | main | 2026-11-20 14:03:24 UTC | 14:04:33 UTC | 69.0 s | power 10 |
+| cam03 | substream | 2026-11-20 13:22:01 UTC | 13:23:39 UTC | 98.0 s | power 1 |
+| cam03 | substream | 2026-11-20 13:32:01 UTC | 13:32:56 UTC | 55.0 s | power 2 |
+| cam03 | substream | 2026-11-20 13:35:03 UTC | 13:36:35 UTC | 92.0 s | power 3 |
+| cam03 | substream | 2026-11-20 13:39:02 UTC | 13:40:20 UTC | 78.0 s | power 4 |
+| cam03 | substream | 2026-11-20 13:43:03 UTC | 13:44:40 UTC | 97.0 s | power 5 |
+| cam03 | substream | 2026-11-20 13:47:00 UTC | 13:48:43 UTC | 103.0 s | power 6 |
+| cam03 | substream | 2026-11-20 13:51:02 UTC | 13:52:27 UTC | 85.0 s | power 7 |
+| cam03 | substream | 2026-11-20 13:55:02 UTC | 13:56:26 UTC | 84.0 s | power 8 |
+| cam03 | substream | 2026-11-20 13:59:01 UTC | 14:00:24 UTC | 83.0 s | power 9 |
+| cam03 | substream | 2026-11-20 14:03:03 UTC | 14:04:25 UTC | 82.0 s | power 10 |
+| cam04 | main | 2026-11-20 13:22:30 UTC | 13:23:56 UTC | 86.0 s | power 1 |
+| cam04 | main | 2026-11-20 13:31:55 UTC | 13:33:04 UTC | 69.0 s | power 2 |
+| cam04 | main | 2026-11-20 13:35:35 UTC | 13:36:42 UTC | 67.0 s | power 3 |
+| cam04 | main | 2026-11-20 13:39:22 UTC | 13:40:28 UTC | 66.0 s | power 4 |
+| cam04 | main | 2026-11-20 13:43:27 UTC | 13:44:49 UTC | 82.0 s | power 5 |
+| cam04 | main | 2026-11-20 13:47:39 UTC | 13:48:51 UTC | 71.0 s | power 6 |
+| cam04 | main | 2026-11-20 13:51:31 UTC | 13:52:35 UTC | 64.0 s | power 7 |
+| cam04 | main | 2026-11-20 13:55:26 UTC | 13:56:34 UTC | 67.0 s | power 8 |
+| cam04 | main | 2026-11-20 13:59:24 UTC | 14:00:32 UTC | 67.0 s | power 9 |
+| cam04 | main | 2026-11-20 14:03:24 UTC | 14:04:33 UTC | 69.0 s | power 10 |
+| cam04 | substream | 2026-11-20 13:22:04 UTC | 13:23:39 UTC | 95.0 s | power 1 |
+| cam04 | substream | 2026-11-20 13:32:01 UTC | 13:32:56 UTC | 55.0 s | power 2 |
+| cam04 | substream | 2026-11-20 13:35:02 UTC | 13:36:35 UTC | 93.0 s | power 3 |
+| cam04 | substream | 2026-11-20 13:39:02 UTC | 13:40:20 UTC | 78.0 s | power 4 |
+| cam04 | substream | 2026-11-20 13:43:03 UTC | 13:44:40 UTC | 97.0 s | power 5 |
+| cam04 | substream | 2026-11-20 13:47:00 UTC | 13:48:43 UTC | 103.0 s | power 6 |
+| cam04 | substream | 2026-11-20 13:51:02 UTC | 13:52:27 UTC | 85.0 s | power 7 |
+| cam04 | substream | 2026-11-20 13:55:02 UTC | 13:56:26 UTC | 84.0 s | power 8 |
+| cam04 | substream | 2026-11-20 13:59:01 UTC | 14:00:24 UTC | 83.0 s | power 9 |
+| cam04 | substream | 2026-11-20 14:03:03 UTC | 14:04:25 UTC | 82.0 s | power 10 |
+| cam05 | main | 2026-11-20 13:22:24 UTC | 13:23:56 UTC | 92.0 s | power 1 |
+| cam05 | main | 2026-11-20 13:31:55 UTC | 13:33:04 UTC | 69.0 s | power 2 |
+| cam05 | main | 2026-11-20 13:35:35 UTC | 13:36:43 UTC | 68.0 s | power 3 |
+| cam05 | main | 2026-11-20 13:39:22 UTC | 13:40:28 UTC | 66.0 s | power 4 |
+| cam05 | main | 2026-11-20 13:43:27 UTC | 13:44:49 UTC | 82.0 s | power 5 |
+| cam05 | main | 2026-11-20 13:47:40 UTC | 13:48:51 UTC | 71.0 s | power 6 |
+| cam05 | main | 2026-11-20 13:51:30 UTC | 13:52:35 UTC | 64.0 s | power 7 |
+| cam05 | main | 2026-11-20 13:55:27 UTC | 13:56:34 UTC | 67.0 s | power 8 |
+| cam05 | main | 2026-11-20 13:59:25 UTC | 14:00:33 UTC | 68.0 s | power 9 |
+| cam05 | main | 2026-11-20 14:03:24 UTC | 14:04:33 UTC | 69.0 s | power 10 |
+| cam05 | substream | 2026-11-20 13:22:02 UTC | 13:23:39 UTC | 97.0 s | power 1 |
+| cam05 | substream | 2026-11-20 13:32:01 UTC | 13:32:56 UTC | 55.0 s | power 2 |
+| cam05 | substream | 2026-11-20 13:35:03 UTC | 13:36:35 UTC | 92.0 s | power 3 |
+| cam05 | substream | 2026-11-20 13:39:02 UTC | 13:40:20 UTC | 78.0 s | power 4 |
+| cam05 | substream | 2026-11-20 13:43:03 UTC | 13:44:40 UTC | 97.0 s | power 5 |
+| cam05 | substream | 2026-11-20 13:47:00 UTC | 13:48:43 UTC | 103.0 s | power 6 |
+| cam05 | substream | 2026-11-20 13:51:02 UTC | 13:52:26 UTC | 84.0 s | power 7 |
+| cam05 | substream | 2026-11-20 13:55:02 UTC | 13:56:25 UTC | 83.0 s | power 8 |
+| cam05 | substream | 2026-11-20 13:59:01 UTC | 14:00:24 UTC | 83.0 s | power 9 |
+| cam05 | substream | 2026-11-20 14:03:03 UTC | 14:04:25 UTC | 82.0 s | power 10 |
+| cam06 | main | 2026-11-20 13:22:26 UTC | 13:23:56 UTC | 90.0 s | power 1 |
+| cam06 | main | 2026-11-20 13:31:55 UTC | 13:33:04 UTC | 69.0 s | power 2 |
+| cam06 | main | 2026-11-20 13:35:33 UTC | 13:36:43 UTC | 70.0 s | power 3 |
+| cam06 | main | 2026-11-20 13:39:22 UTC | 13:40:28 UTC | 66.0 s | power 4 |
+| cam06 | main | 2026-11-20 13:43:28 UTC | 13:44:49 UTC | 81.0 s | power 5 |
+| cam06 | main | 2026-11-20 13:47:38 UTC | 13:48:51 UTC | 73.0 s | power 6 |
+| cam06 | main | 2026-11-20 13:51:31 UTC | 13:52:35 UTC | 64.0 s | power 7 |
+| cam06 | main | 2026-11-20 13:55:25 UTC | 13:56:34 UTC | 69.0 s | power 8 |
+| cam06 | main | 2026-11-20 13:59:23 UTC | 14:00:32 UTC | 69.0 s | power 9 |
+| cam06 | main | 2026-11-20 14:03:22 UTC | 14:04:33 UTC | 71.0 s | power 10 |
+| cam06 | substream | 2026-11-20 13:22:01 UTC | 13:23:38 UTC | 97.0 s | power 1 |
+| cam06 | substream | 2026-11-20 13:32:01 UTC | 13:32:56 UTC | 55.0 s | power 2 |
+| cam06 | substream | 2026-11-20 13:35:01 UTC | 13:36:35 UTC | 94.0 s | power 3 |
+| cam06 | substream | 2026-11-20 13:39:00 UTC | 13:40:20 UTC | 80.0 s | power 4 |
+| cam06 | substream | 2026-11-20 13:43:02 UTC | 13:44:40 UTC | 98.0 s | power 5 |
+| cam06 | substream | 2026-11-20 13:47:03 UTC | 13:48:43 UTC | 100.0 s | power 6 |
+| cam06 | substream | 2026-11-20 13:51:02 UTC | 13:52:26 UTC | 84.0 s | power 7 |
+| cam06 | substream | 2026-11-20 13:55:03 UTC | 13:56:25 UTC | 82.0 s | power 8 |
+| cam06 | substream | 2026-11-20 13:59:02 UTC | 14:00:24 UTC | 82.0 s | power 9 |
+| cam06 | substream | 2026-11-20 14:03:00 UTC | 14:04:25 UTC | 85.0 s | power 10 |
+| cam07 | main | 2026-11-20 13:22:27 UTC | 13:23:56 UTC | 89.0 s | power 1 |
+| cam07 | main | 2026-11-20 13:31:55 UTC | 13:33:04 UTC | 69.0 s | power 2 |
+| cam07 | main | 2026-11-20 13:35:33 UTC | 13:36:43 UTC | 70.0 s | power 3 |
+| cam07 | main | 2026-11-20 13:39:22 UTC | 13:40:28 UTC | 66.0 s | power 4 |
+| cam07 | main | 2026-11-20 13:43:28 UTC | 13:44:49 UTC | 81.0 s | power 5 |
+| cam07 | main | 2026-11-20 13:47:38 UTC | 13:48:51 UTC | 73.0 s | power 6 |
+| cam07 | main | 2026-11-20 13:51:31 UTC | 13:52:35 UTC | 64.0 s | power 7 |
+| cam07 | main | 2026-11-20 13:55:25 UTC | 13:56:34 UTC | 69.0 s | power 8 |
+| cam07 | main | 2026-11-20 13:59:24 UTC | 14:00:33 UTC | 69.0 s | power 9 |
+| cam07 | main | 2026-11-20 14:03:22 UTC | 14:04:34 UTC | 72.0 s | power 10 |
+| cam07 | substream | 2026-11-20 13:22:02 UTC | 13:23:38 UTC | 96.0 s | power 1 |
+| cam07 | substream | 2026-11-20 13:32:01 UTC | 13:32:56 UTC | 55.0 s | power 2 |
+| cam07 | substream | 2026-11-20 13:35:01 UTC | 13:36:35 UTC | 94.0 s | power 3 |
+| cam07 | substream | 2026-11-20 13:39:01 UTC | 13:40:20 UTC | 79.0 s | power 4 |
+| cam07 | substream | 2026-11-20 13:43:03 UTC | 13:44:40 UTC | 97.0 s | power 5 |
+| cam07 | substream | 2026-11-20 13:47:00 UTC | 13:48:43 UTC | 103.0 s | power 6 |
+| cam07 | substream | 2026-11-20 13:51:02 UTC | 13:52:26 UTC | 84.0 s | power 7 |
+| cam07 | substream | 2026-11-20 13:55:03 UTC | 13:56:25 UTC | 82.0 s | power 8 |
+| cam07 | substream | 2026-11-20 13:59:01 UTC | 14:00:24 UTC | 83.0 s | power 9 |
+| cam07 | substream | 2026-11-20 14:03:00 UTC | 14:04:25 UTC | 85.0 s | power 10 |
+| cam08 | main | 2026-11-20 13:22:24 UTC | 13:23:56 UTC | 92.0 s | power 1 |
+| cam08 | main | 2026-11-20 13:31:55 UTC | 13:33:04 UTC | 69.0 s | power 2 |
+| cam08 | main | 2026-11-20 13:35:33 UTC | 13:36:43 UTC | 70.0 s | power 3 |
+| cam08 | main | 2026-11-20 13:39:22 UTC | 13:40:28 UTC | 66.0 s | power 4 |
+| cam08 | main | 2026-11-20 13:43:28 UTC | 13:44:49 UTC | 81.0 s | power 5 |
+| cam08 | main | 2026-11-20 13:47:38 UTC | 13:48:51 UTC | 73.0 s | power 6 |
+| cam08 | main | 2026-11-20 13:51:31 UTC | 13:52:35 UTC | 64.0 s | power 7 |
+| cam08 | main | 2026-11-20 13:55:25 UTC | 13:56:34 UTC | 69.0 s | power 8 |
+| cam08 | main | 2026-11-20 13:59:23 UTC | 14:00:33 UTC | 70.0 s | power 9 |
+| cam08 | main | 2026-11-20 14:03:22 UTC | 14:04:34 UTC | 72.0 s | power 10 |
+| cam08 | substream | 2026-11-20 13:22:01 UTC | 13:23:38 UTC | 97.0 s | power 1 |
+| cam08 | substream | 2026-11-20 13:32:01 UTC | 13:32:56 UTC | 55.0 s | power 2 |
+| cam08 | substream | 2026-11-20 13:35:01 UTC | 13:36:35 UTC | 94.0 s | power 3 |
+| cam08 | substream | 2026-11-20 13:39:00 UTC | 13:40:20 UTC | 80.0 s | power 4 |
+| cam08 | substream | 2026-11-20 13:43:02 UTC | 13:44:40 UTC | 98.0 s | power 5 |
+| cam08 | substream | 2026-11-20 13:47:03 UTC | 13:48:43 UTC | 100.0 s | power 6 |
+| cam08 | substream | 2026-11-20 13:51:02 UTC | 13:52:26 UTC | 84.0 s | power 7 |
+| cam08 | substream | 2026-11-20 13:55:02 UTC | 13:56:25 UTC | 83.0 s | power 8 |
+| cam08 | substream | 2026-11-20 13:59:02 UTC | 14:00:24 UTC | 82.0 s | power 9 |
+| cam08 | substream | 2026-11-20 14:03:00 UTC | 14:04:25 UTC | 85.0 s | power 10 |
+| cam09 | main | 2026-11-20 13:22:24 UTC | 13:23:56 UTC | 92.0 s | power 1 |
+| cam09 | main | 2026-11-20 13:31:55 UTC | 13:33:04 UTC | 69.0 s | power 2 |
+| cam09 | main | 2026-11-20 13:35:33 UTC | 13:36:43 UTC | 70.0 s | power 3 |
+| cam09 | main | 2026-11-20 13:39:22 UTC | 13:40:28 UTC | 66.0 s | power 4 |
+| cam09 | main | 2026-11-20 13:43:28 UTC | 13:44:49 UTC | 81.0 s | power 5 |
+| cam09 | main | 2026-11-20 13:47:38 UTC | 13:48:51 UTC | 73.0 s | power 6 |
+| cam09 | main | 2026-11-20 13:51:31 UTC | 13:52:35 UTC | 64.0 s | power 7 |
+| cam09 | main | 2026-11-20 13:55:25 UTC | 13:56:34 UTC | 69.0 s | power 8 |
+| cam09 | main | 2026-11-20 13:59:24 UTC | 14:00:33 UTC | 69.0 s | power 9 |
+| cam09 | main | 2026-11-20 14:03:22 UTC | 14:04:34 UTC | 72.0 s | power 10 |
+| cam09 | substream | 2026-11-20 13:22:01 UTC | 13:23:38 UTC | 97.0 s | power 1 |
+| cam09 | substream | 2026-11-20 13:32:01 UTC | 13:32:56 UTC | 55.0 s | power 2 |
+| cam09 | substream | 2026-11-20 13:35:01 UTC | 13:36:35 UTC | 94.0 s | power 3 |
+| cam09 | substream | 2026-11-20 13:39:00 UTC | 13:40:20 UTC | 80.0 s | power 4 |
+| cam09 | substream | 2026-11-20 13:43:03 UTC | 13:44:40 UTC | 97.0 s | power 5 |
+| cam09 | substream | 2026-11-20 13:47:00 UTC | 13:48:43 UTC | 103.0 s | power 6 |
+| cam09 | substream | 2026-11-20 13:51:02 UTC | 13:52:26 UTC | 84.0 s | power 7 |
+| cam09 | substream | 2026-11-20 13:55:03 UTC | 13:56:25 UTC | 82.0 s | power 8 |
+| cam09 | substream | 2026-11-20 13:59:01 UTC | 14:00:24 UTC | 83.0 s | power 9 |
+| cam09 | substream | 2026-11-20 14:03:00 UTC | 14:04:25 UTC | 85.0 s | power 10 |
+| cam10 | main | 2026-11-20 13:22:29 UTC | 13:23:56 UTC | 87.0 s | power 1 |
+| cam10 | main | 2026-11-20 13:31:56 UTC | 13:33:04 UTC | 68.0 s | power 2 |
+| cam10 | main | 2026-11-20 13:35:34 UTC | 13:36:43 UTC | 69.0 s | power 3 |
+| cam10 | main | 2026-11-20 13:39:22 UTC | 13:40:28 UTC | 66.0 s | power 4 |
+| cam10 | main | 2026-11-20 13:43:28 UTC | 13:44:49 UTC | 81.0 s | power 5 |
+| cam10 | main | 2026-11-20 13:47:38 UTC | 13:48:52 UTC | 74.0 s | power 6 |
+| cam10 | main | 2026-11-20 13:51:31 UTC | 13:52:35 UTC | 64.0 s | power 7 |
+| cam10 | main | 2026-11-20 13:55:25 UTC | 13:56:34 UTC | 69.0 s | power 8 |
+| cam10 | main | 2026-11-20 13:59:24 UTC | 14:00:33 UTC | 69.0 s | power 9 |
+| cam10 | main | 2026-11-20 14:03:22 UTC | 14:04:34 UTC | 72.0 s | power 10 |
+| cam10 | substream | 2026-11-20 13:22:00 UTC | 13:23:38 UTC | 98.0 s | power 1 |
+| cam10 | substream | 2026-11-20 13:32:00 UTC | 13:32:56 UTC | 56.0 s | power 2 |
+| cam10 | substream | 2026-11-20 13:35:01 UTC | 13:36:35 UTC | 94.0 s | power 3 |
+| cam10 | substream | 2026-11-20 13:39:00 UTC | 13:40:20 UTC | 80.0 s | power 4 |
+| cam10 | substream | 2026-11-20 13:43:03 UTC | 13:44:40 UTC | 97.0 s | power 5 |
+| cam10 | substream | 2026-11-20 13:47:00 UTC | 13:48:43 UTC | 103.0 s | power 6 |
+| cam10 | substream | 2026-11-20 13:51:02 UTC | 13:52:26 UTC | 84.0 s | power 7 |
+| cam10 | substream | 2026-11-20 13:55:03 UTC | 13:56:25 UTC | 82.0 s | power 8 |
+| cam10 | substream | 2026-11-20 13:59:01 UTC | 14:00:24 UTC | 83.0 s | power 9 |
+| cam10 | substream | 2026-11-20 14:03:00 UTC | 14:04:25 UTC | 85.0 s | power 10 |
+
+=== m11-power: FAIL 5/6
+
+settling 300 s before the next step
+
+=== m10-kill: Frigate killed 10 times (gateway)
+kill 1/10 at 2026-11-20 14:13:06 UTC
+kill 2/10 at 2026-11-20 14:14:29 UTC
+kill 3/10 at 2026-11-20 14:15:52 UTC
+kill 4/10 at 2026-11-20 14:17:15 UTC
+kill 5/10 at 2026-11-20 14:18:38 UTC
+kill 6/10 at 2026-11-20 14:20:01 UTC
+kill 7/10 at 2026-11-20 14:21:23 UTC
+kill 8/10 at 2026-11-20 14:22:46 UTC
+kill 9/10 at 2026-11-20 14:24:09 UTC
+kill 10/10 at 2026-11-20 14:25:32 UTC
+PASS  kill: recording back on its own after every one of 10 events (limit 60 s)  slowest main stream 8 s, substream 0 s
+PASS  no unexplained gap in the log  100 gaps, 0 unexplained
+report: /opt/vivo-gateway/reports/m10-recovery-20261120-142755.md
+m26-exit=0
+=== m10-kill: PASS 2/2
+
+settling 300 s before the next step
+
+=== m10-reboot: 10 gateway reboots (workstation)
+reboot 1/10 at 2026-11-20 14:33:31 UTC (gateway clock, +1.41 s from this machine)
+reboot 2/10 at 2026-11-20 14:37:09 UTC (gateway clock, +2.22 s from this machine)
+reboot 3/10 at 2026-11-20 14:41:13 UTC (gateway clock, +1.72 s from this machine)
+reboot 4/10 at 2026-11-20 14:45:16 UTC (gateway clock, +1.59 s from this machine)
+reboot 5/10 at 2026-11-20 14:49:06 UTC (gateway clock, +1.78 s from this machine)
+reboot 6/10 at 2026-11-20 14:52:28 UTC (gateway clock, +1.61 s from this machine)
+reboot 7/10 at 2026-11-20 14:56:16 UTC (gateway clock, +1.74 s from this machine)
+reboot 8/10 at 2026-11-20 15:00:08 UTC (gateway clock, +1.50 s from this machine)
+reboot 9/10 at 2026-11-20 15:04:12 UTC (gateway clock, +1.64 s from this machine)
+reboot 10/10 at 2026-11-20 15:08:14 UTC (gateway clock, +1.86 s from this machine)
+events: m10-events-reboot-20261120-143328.csv
+PASS  reboot: recording back on its own after every one of 10 events (limit 180 s)  slowest main stream 61 s, substream 56 s
+PASS  no unexplained gap in the log  200 gaps, 0 unexplained
+report: /opt/vivo-gateway/reports/m10-recovery-20261120-151222.md
+
+# M10 recording recovery
+
+Window 2026-11-20 14:31:31 UTC to 2026-11-20 15:11:51 UTC; 10 events, 10 cameras. Recovery is measured from the reboot command, the kill, or the moment a camera's power came back, to the end of the gap it caused (0 when recording did not stop).
+
+Result: **2 passed, 0 failed**
+
+| Result | Check | Detail |
+|---|---|---|
+| PASS | reboot: recording back on its own after every one of 10 events (limit 180 s) | slowest main stream 61 s, substream 56 s |
+| PASS | no unexplained gap in the log | 200 gaps, 0 unexplained |
+
+## Recovery per event and camera
+
+| Event | Camera | At (UTC) | Main stream back | Substream back | Lost before the event (main) | Result |
+|---|---|---|---|---|---|---|
+| reboot 1 | cam01 | 2026-11-20 14:33:31 UTC | 60 s | 53 s | 1 s | PASS |
+| reboot 1 | cam02 | 2026-11-20 14:33:31 UTC | 60 s | 53 s | 1 s | PASS |
+| reboot 1 | cam03 | 2026-11-20 14:33:31 UTC | 60 s | 53 s | 1 s | PASS |
+| reboot 1 | cam04 | 2026-11-20 14:33:31 UTC | 60 s | 53 s | 1 s | PASS |
+| reboot 1 | cam05 | 2026-11-20 14:33:31 UTC | 60 s | 56 s | 1 s | PASS |
+| reboot 1 | cam06 | 2026-11-20 14:33:31 UTC | 60 s | 53 s | 2 s | PASS |
+| reboot 1 | cam07 | 2026-11-20 14:33:31 UTC | 60 s | 53 s | 2 s | PASS |
+| reboot 1 | cam08 | 2026-11-20 14:33:31 UTC | 61 s | 53 s | 2 s | PASS |
+| reboot 1 | cam09 | 2026-11-20 14:33:31 UTC | 61 s | 53 s | 2 s | PASS |
+| reboot 1 | cam10 | 2026-11-20 14:33:31 UTC | 61 s | 53 s | 2 s | PASS |
+| reboot 2 | cam01 | 2026-11-20 14:37:09 UTC | 57 s | 51 s | 6 s | PASS |
+| reboot 2 | cam02 | 2026-11-20 14:37:09 UTC | 57 s | 53 s | 6 s | PASS |
+| reboot 2 | cam03 | 2026-11-20 14:37:09 UTC | 58 s | 51 s | 6 s | PASS |
+| reboot 2 | cam04 | 2026-11-20 14:37:09 UTC | 58 s | 51 s | 6 s | PASS |
+| reboot 2 | cam05 | 2026-11-20 14:37:09 UTC | 58 s | 51 s | 6 s | PASS |
+| reboot 2 | cam06 | 2026-11-20 14:37:09 UTC | 58 s | 50 s | 8 s | PASS |
+| reboot 2 | cam07 | 2026-11-20 14:37:09 UTC | 58 s | 51 s | 8 s | PASS |
+| reboot 2 | cam08 | 2026-11-20 14:37:09 UTC | 58 s | 51 s | 8 s | PASS |
+| reboot 2 | cam09 | 2026-11-20 14:37:09 UTC | 58 s | 51 s | 8 s | PASS |
+| reboot 2 | cam10 | 2026-11-20 14:37:09 UTC | 58 s | 50 s | 8 s | PASS |
+| reboot 3 | cam01 | 2026-11-20 14:41:13 UTC | 56 s | 50 s | 6 s | PASS |
+| reboot 3 | cam02 | 2026-11-20 14:41:13 UTC | 56 s | 50 s | 6 s | PASS |
+| reboot 3 | cam03 | 2026-11-20 14:41:13 UTC | 58 s | 50 s | 6 s | PASS |
+| reboot 3 | cam04 | 2026-11-20 14:41:13 UTC | 58 s | 50 s | 6 s | PASS |
+| reboot 3 | cam05 | 2026-11-20 14:41:13 UTC | 58 s | 50 s | 6 s | PASS |
+| reboot 3 | cam06 | 2026-11-20 14:41:13 UTC | 58 s | 50 s | 6 s | PASS |
+| reboot 3 | cam07 | 2026-11-20 14:41:13 UTC | 58 s | 50 s | 6 s | PASS |
+| reboot 3 | cam08 | 2026-11-20 14:41:13 UTC | 58 s | 50 s | 6 s | PASS |
+| reboot 3 | cam09 | 2026-11-20 14:41:13 UTC | 58 s | 50 s | 6 s | PASS |
+| reboot 3 | cam10 | 2026-11-20 14:41:13 UTC | 58 s | 50 s | 6 s | PASS |
+| reboot 4 | cam01 | 2026-11-20 14:45:16 UTC | 59 s | 52 s | 7 s | PASS |
+| reboot 4 | cam02 | 2026-11-20 14:45:16 UTC | 59 s | 52 s | 7 s | PASS |
+| reboot 4 | cam03 | 2026-11-20 14:45:16 UTC | 59 s | 55 s | 7 s | PASS |
+| reboot 4 | cam04 | 2026-11-20 14:45:16 UTC | 59 s | 52 s | 7 s | PASS |
+| reboot 4 | cam05 | 2026-11-20 14:45:16 UTC | 59 s | 52 s | 7 s | PASS |
+| reboot 4 | cam06 | 2026-11-20 14:45:16 UTC | 59 s | 52 s | 4 s | PASS |
+| reboot 4 | cam07 | 2026-11-20 14:45:16 UTC | 59 s | 52 s | 3 s | PASS |
+| reboot 4 | cam08 | 2026-11-20 14:45:16 UTC | 59 s | 52 s | 6 s | PASS |
+| reboot 4 | cam09 | 2026-11-20 14:45:16 UTC | 59 s | 52 s | 4 s | PASS |
+| reboot 4 | cam10 | 2026-11-20 14:45:16 UTC | 60 s | 52 s | 6 s | PASS |
+| reboot 5 | cam01 | 2026-11-20 14:49:06 UTC | 58 s | 51 s | 0 s | PASS |
+| reboot 5 | cam02 | 2026-11-20 14:49:06 UTC | 58 s | 51 s | 0 s | PASS |
+| reboot 5 | cam03 | 2026-11-20 14:49:06 UTC | 58 s | 51 s | 0 s | PASS |
+| reboot 5 | cam04 | 2026-11-20 14:49:06 UTC | 58 s | 51 s | 0 s | PASS |
+| reboot 5 | cam05 | 2026-11-20 14:49:06 UTC | 59 s | 51 s | 0 s | PASS |
+| reboot 5 | cam06 | 2026-11-20 14:49:06 UTC | 59 s | 52 s | 0 s | PASS |
+| reboot 5 | cam07 | 2026-11-20 14:49:06 UTC | 59 s | 51 s | 0 s | PASS |
+| reboot 5 | cam08 | 2026-11-20 14:49:06 UTC | 59 s | 51 s | 0 s | PASS |
+| reboot 5 | cam09 | 2026-11-20 14:49:06 UTC | 59 s | 51 s | 0 s | PASS |
+| reboot 5 | cam10 | 2026-11-20 14:49:06 UTC | 59 s | 51 s | 0 s | PASS |
+| reboot 6 | cam01 | 2026-11-20 14:52:28 UTC | 57 s | 50 s | 4 s | PASS |
+| reboot 6 | cam02 | 2026-11-20 14:52:28 UTC | 57 s | 53 s | 3 s | PASS |
+| reboot 6 | cam03 | 2026-11-20 14:52:28 UTC | 57 s | 50 s | 3 s | PASS |
+| reboot 6 | cam04 | 2026-11-20 14:52:28 UTC | 57 s | 50 s | 3 s | PASS |
+| reboot 6 | cam05 | 2026-11-20 14:52:28 UTC | 57 s | 53 s | 3 s | PASS |
+| reboot 6 | cam06 | 2026-11-20 14:52:28 UTC | 58 s | 50 s | 3 s | PASS |
+| reboot 6 | cam07 | 2026-11-20 14:52:28 UTC | 58 s | 53 s | 3 s | PASS |
+| reboot 6 | cam08 | 2026-11-20 14:52:28 UTC | 58 s | 50 s | 3 s | PASS |
+| reboot 6 | cam09 | 2026-11-20 14:52:28 UTC | 58 s | 53 s | 3 s | PASS |
+| reboot 6 | cam10 | 2026-11-20 14:52:28 UTC | 58 s | 50 s | 2 s | PASS |
+| reboot 7 | cam01 | 2026-11-20 14:56:16 UTC | 59 s | 51 s | 0 s | PASS |
+| reboot 7 | cam02 | 2026-11-20 14:56:16 UTC | 59 s | 52 s | 0 s | PASS |
+| reboot 7 | cam03 | 2026-11-20 14:56:16 UTC | 59 s | 51 s | 0 s | PASS |
+| reboot 7 | cam04 | 2026-11-20 14:56:16 UTC | 59 s | 51 s | 0 s | PASS |
+| reboot 7 | cam05 | 2026-11-20 14:56:16 UTC | 59 s | 52 s | 0 s | PASS |
+| reboot 7 | cam06 | 2026-11-20 14:56:16 UTC | 59 s | 51 s | 0 s | PASS |
+| reboot 7 | cam07 | 2026-11-20 14:56:16 UTC | 59 s | 51 s | 0 s | PASS |
+| reboot 7 | cam08 | 2026-11-20 14:56:16 UTC | 60 s | 51 s | 0 s | PASS |
+| reboot 7 | cam09 | 2026-11-20 14:56:16 UTC | 60 s | 51 s | 0 s | PASS |
+| reboot 7 | cam10 | 2026-11-20 14:56:16 UTC | 60 s | 51 s | 0 s | PASS |
+| reboot 8 | cam01 | 2026-11-20 15:00:08 UTC | 58 s | 51 s | 2 s | PASS |
+| reboot 8 | cam02 | 2026-11-20 15:00:08 UTC | 58 s | 50 s | 2 s | PASS |
+| reboot 8 | cam03 | 2026-11-20 15:00:08 UTC | 58 s | 50 s | 2 s | PASS |
+| reboot 8 | cam04 | 2026-11-20 15:00:08 UTC | 58 s | 51 s | 2 s | PASS |
+| reboot 8 | cam05 | 2026-11-20 15:00:08 UTC | 58 s | 51 s | 1 s | PASS |
+| reboot 8 | cam06 | 2026-11-20 15:00:08 UTC | 58 s | 51 s | 1 s | PASS |
+| reboot 8 | cam07 | 2026-11-20 15:00:08 UTC | 58 s | 51 s | 1 s | PASS |
+| reboot 8 | cam08 | 2026-11-20 15:00:08 UTC | 58 s | 51 s | 1 s | PASS |
+| reboot 8 | cam09 | 2026-11-20 15:00:08 UTC | 58 s | 51 s | 1 s | PASS |
+| reboot 8 | cam10 | 2026-11-20 15:00:08 UTC | 58 s | 51 s | 1 s | PASS |
+| reboot 9 | cam01 | 2026-11-20 15:04:12 UTC | 57 s | 50 s | 6 s | PASS |
+| reboot 9 | cam02 | 2026-11-20 15:04:12 UTC | 57 s | 53 s | 6 s | PASS |
+| reboot 9 | cam03 | 2026-11-20 15:04:12 UTC | 57 s | 50 s | 6 s | PASS |
+| reboot 9 | cam04 | 2026-11-20 15:04:12 UTC | 57 s | 50 s | 6 s | PASS |
+| reboot 9 | cam05 | 2026-11-20 15:04:12 UTC | 57 s | 50 s | 2 s | PASS |
+| reboot 9 | cam06 | 2026-11-20 15:04:12 UTC | 58 s | 53 s | 6 s | PASS |
+| reboot 9 | cam07 | 2026-11-20 15:04:12 UTC | 58 s | 50 s | 5 s | PASS |
+| reboot 9 | cam08 | 2026-11-20 15:04:12 UTC | 58 s | 50 s | 5 s | PASS |
+| reboot 9 | cam09 | 2026-11-20 15:04:12 UTC | 58 s | 50 s | 5 s | PASS |
+| reboot 9 | cam10 | 2026-11-20 15:04:12 UTC | 58 s | 50 s | 5 s | PASS |
+| reboot 10 | cam01 | 2026-11-20 15:08:14 UTC | 57 s | 50 s | 7 s | PASS |
+| reboot 10 | cam02 | 2026-11-20 15:08:14 UTC | 57 s | 50 s | 7 s | PASS |
+| reboot 10 | cam03 | 2026-11-20 15:08:14 UTC | 57 s | 53 s | 6 s | PASS |
+| reboot 10 | cam04 | 2026-11-20 15:08:14 UTC | 58 s | 53 s | 6 s | PASS |
+| reboot 10 | cam05 | 2026-11-20 15:08:14 UTC | 58 s | 50 s | 6 s | PASS |
+| reboot 10 | cam06 | 2026-11-20 15:08:14 UTC | 58 s | 50 s | 6 s | PASS |
+| reboot 10 | cam07 | 2026-11-20 15:08:14 UTC | 58 s | 50 s | 6 s | PASS |
+| reboot 10 | cam08 | 2026-11-20 15:08:14 UTC | 58 s | 50 s | 6 s | PASS |
+| reboot 10 | cam09 | 2026-11-20 15:08:14 UTC | 58 s | 50 s | 6 s | PASS |
+| reboot 10 | cam10 | 2026-11-20 15:08:14 UTC | 58 s | 50 s | 6 s | PASS |
+
+## Gap log
+
+| Camera | Stream | Gap start (UTC) | End | Length | Cause |
+|---|---|---|---|---|---|
+| cam01 | main | 2026-11-20 14:33:30 UTC | 14:34:32 UTC | 61.0 s | reboot 1 |
+| cam01 | main | 2026-11-20 14:37:04 UTC | 14:38:07 UTC | 63.0 s | reboot 2 |
+| cam01 | main | 2026-11-20 14:41:06 UTC | 14:42:10 UTC | 63.0 s | reboot 3 |
+| cam01 | main | 2026-11-20 14:45:10 UTC | 14:46:16 UTC | 66.0 s | reboot 4 |
+| cam01 | main | 2026-11-20 14:49:07 UTC | 14:50:05 UTC | 58.0 s | reboot 5 |
+| cam01 | main | 2026-11-20 14:52:23 UTC | 14:53:25 UTC | 61.0 s | reboot 6 |
+| cam01 | main | 2026-11-20 14:56:17 UTC | 14:57:16 UTC | 59.0 s | reboot 7 |
+| cam01 | main | 2026-11-20 15:00:07 UTC | 15:01:07 UTC | 60.0 s | reboot 8 |
+| cam01 | main | 2026-11-20 15:04:05 UTC | 15:05:09 UTC | 63.0 s | reboot 9 |
+| cam01 | main | 2026-11-20 15:08:08 UTC | 15:09:12 UTC | 64.0 s | reboot 10 |
+| cam01 | substream | 2026-11-20 14:33:36 UTC | 14:34:25 UTC | 49.0 s | reboot 1 |
+| cam01 | substream | 2026-11-20 14:37:12 UTC | 14:38:01 UTC | 49.0 s | reboot 2 |
+| cam01 | substream | 2026-11-20 14:41:16 UTC | 14:42:03 UTC | 47.0 s | reboot 3 |
+| cam01 | substream | 2026-11-20 14:45:22 UTC | 14:46:09 UTC | 47.0 s | reboot 4 |
+| cam01 | substream | 2026-11-20 14:49:09 UTC | 14:49:58 UTC | 49.0 s | reboot 5 |
+| cam01 | substream | 2026-11-20 14:52:32 UTC | 14:53:18 UTC | 46.0 s | reboot 6 |
+| cam01 | substream | 2026-11-20 14:56:20 UTC | 14:57:08 UTC | 48.0 s | reboot 7 |
+| cam01 | substream | 2026-11-20 15:00:12 UTC | 15:01:00 UTC | 48.0 s | reboot 8 |
+| cam01 | substream | 2026-11-20 15:04:16 UTC | 15:05:02 UTC | 46.0 s | reboot 9 |
+| cam01 | substream | 2026-11-20 15:08:18 UTC | 15:09:05 UTC | 47.0 s | reboot 10 |
+| cam02 | main | 2026-11-20 14:33:31 UTC | 14:34:32 UTC | 61.0 s | reboot 1 |
+| cam02 | main | 2026-11-20 14:37:04 UTC | 14:38:07 UTC | 63.0 s | reboot 2 |
+| cam02 | main | 2026-11-20 14:41:06 UTC | 14:42:10 UTC | 63.0 s | reboot 3 |
+| cam02 | main | 2026-11-20 14:45:10 UTC | 14:46:16 UTC | 66.0 s | reboot 4 |
+| cam02 | main | 2026-11-20 14:49:06 UTC | 14:50:05 UTC | 58.0 s | reboot 5 |
+| cam02 | main | 2026-11-20 14:52:25 UTC | 14:53:25 UTC | 60.0 s | reboot 6 |
+| cam02 | main | 2026-11-20 14:56:17 UTC | 14:57:16 UTC | 59.0 s | reboot 7 |
+| cam02 | main | 2026-11-20 15:00:06 UTC | 15:01:07 UTC | 60.0 s | reboot 8 |
+| cam02 | main | 2026-11-20 15:04:06 UTC | 15:05:09 UTC | 63.0 s | reboot 9 |
+| cam02 | main | 2026-11-20 15:08:08 UTC | 15:09:12 UTC | 64.0 s | reboot 10 |
+| cam02 | substream | 2026-11-20 14:33:35 UTC | 14:34:25 UTC | 50.0 s | reboot 1 |
+| cam02 | substream | 2026-11-20 14:37:12 UTC | 14:38:03 UTC | 51.0 s | reboot 2 |
+| cam02 | substream | 2026-11-20 14:41:17 UTC | 14:42:04 UTC | 47.0 s | reboot 3 |
+| cam02 | substream | 2026-11-20 14:45:21 UTC | 14:46:09 UTC | 48.0 s | reboot 4 |
+| cam02 | substream | 2026-11-20 14:49:10 UTC | 14:49:58 UTC | 48.0 s | reboot 5 |
+| cam02 | substream | 2026-11-20 14:52:31 UTC | 14:53:21 UTC | 50.0 s | reboot 6 |
+| cam02 | substream | 2026-11-20 14:56:20 UTC | 14:57:09 UTC | 49.0 s | reboot 7 |
+| cam02 | substream | 2026-11-20 15:00:12 UTC | 15:00:59 UTC | 47.0 s | reboot 8 |
+| cam02 | substream | 2026-11-20 15:04:16 UTC | 15:05:05 UTC | 49.0 s | reboot 9 |
+| cam02 | substream | 2026-11-20 15:08:18 UTC | 15:09:05 UTC | 47.0 s | reboot 10 |
+| cam03 | main | 2026-11-20 14:33:31 UTC | 14:34:32 UTC | 61.0 s | reboot 1 |
+| cam03 | main | 2026-11-20 14:37:04 UTC | 14:38:08 UTC | 64.0 s | reboot 2 |
+| cam03 | main | 2026-11-20 14:41:07 UTC | 14:42:11 UTC | 64.0 s | reboot 3 |
+| cam03 | main | 2026-11-20 14:45:10 UTC | 14:46:16 UTC | 66.0 s | reboot 4 |
+| cam03 | main | 2026-11-20 14:49:07 UTC | 14:50:05 UTC | 58.0 s | reboot 5 |
+| cam03 | main | 2026-11-20 14:52:25 UTC | 14:53:25 UTC | 60.0 s | reboot 6 |
+| cam03 | main | 2026-11-20 14:56:17 UTC | 14:57:16 UTC | 59.0 s | reboot 7 |
+| cam03 | main | 2026-11-20 15:00:07 UTC | 15:01:07 UTC | 60.0 s | reboot 8 |
+| cam03 | main | 2026-11-20 15:04:06 UTC | 15:05:09 UTC | 63.0 s | reboot 9 |
+| cam03 | main | 2026-11-20 15:08:09 UTC | 15:09:12 UTC | 63.0 s | reboot 10 |
+| cam03 | substream | 2026-11-20 14:33:35 UTC | 14:34:25 UTC | 50.0 s | reboot 1 |
+| cam03 | substream | 2026-11-20 14:37:12 UTC | 14:38:01 UTC | 49.0 s | reboot 2 |
+| cam03 | substream | 2026-11-20 14:41:16 UTC | 14:42:04 UTC | 48.0 s | reboot 3 |
+| cam03 | substream | 2026-11-20 14:45:21 UTC | 14:46:12 UTC | 51.0 s | reboot 4 |
+| cam03 | substream | 2026-11-20 14:49:10 UTC | 14:49:58 UTC | 48.0 s | reboot 5 |
+| cam03 | substream | 2026-11-20 14:52:31 UTC | 14:53:18 UTC | 47.0 s | reboot 6 |
+| cam03 | substream | 2026-11-20 14:56:20 UTC | 14:57:08 UTC | 48.0 s | reboot 7 |
+| cam03 | substream | 2026-11-20 15:00:12 UTC | 15:00:59 UTC | 47.0 s | reboot 8 |
+| cam03 | substream | 2026-11-20 15:04:16 UTC | 15:05:02 UTC | 46.0 s | reboot 9 |
+| cam03 | substream | 2026-11-20 15:08:18 UTC | 15:09:08 UTC | 50.0 s | reboot 10 |
+| cam04 | main | 2026-11-20 14:33:31 UTC | 14:34:32 UTC | 61.0 s | reboot 1 |
+| cam04 | main | 2026-11-20 14:37:04 UTC | 14:38:08 UTC | 64.0 s | reboot 2 |
+| cam04 | main | 2026-11-20 14:41:07 UTC | 14:42:11 UTC | 64.0 s | reboot 3 |
+| cam04 | main | 2026-11-20 14:45:10 UTC | 14:46:16 UTC | 66.0 s | reboot 4 |
+| cam04 | main | 2026-11-20 14:49:06 UTC | 14:50:05 UTC | 58.0 s | reboot 5 |
+| cam04 | main | 2026-11-20 14:52:25 UTC | 14:53:25 UTC | 60.0 s | reboot 6 |
+| cam04 | main | 2026-11-20 14:56:16 UTC | 14:57:16 UTC | 59.0 s | reboot 7 |
+| cam04 | main | 2026-11-20 15:00:06 UTC | 15:01:07 UTC | 60.0 s | reboot 8 |
+| cam04 | main | 2026-11-20 15:04:06 UTC | 15:05:09 UTC | 63.0 s | reboot 9 |
+| cam04 | main | 2026-11-20 15:08:09 UTC | 15:09:13 UTC | 64.0 s | reboot 10 |
+| cam04 | substream | 2026-11-20 14:33:35 UTC | 14:34:25 UTC | 50.0 s | reboot 1 |
+| cam04 | substream | 2026-11-20 14:37:12 UTC | 14:38:01 UTC | 49.0 s | reboot 2 |
+| cam04 | substream | 2026-11-20 14:41:16 UTC | 14:42:04 UTC | 48.0 s | reboot 3 |
+| cam04 | substream | 2026-11-20 14:45:21 UTC | 14:46:09 UTC | 48.0 s | reboot 4 |
+| cam04 | substream | 2026-11-20 14:49:09 UTC | 14:49:58 UTC | 49.0 s | reboot 5 |
+| cam04 | substream | 2026-11-20 14:52:31 UTC | 14:53:18 UTC | 47.0 s | reboot 6 |
+| cam04 | substream | 2026-11-20 14:56:21 UTC | 14:57:08 UTC | 47.0 s | reboot 7 |
+| cam04 | substream | 2026-11-20 15:00:12 UTC | 15:01:00 UTC | 48.0 s | reboot 8 |
+| cam04 | substream | 2026-11-20 15:04:15 UTC | 15:05:02 UTC | 47.0 s | reboot 9 |
+| cam04 | substream | 2026-11-20 15:08:17 UTC | 15:09:08 UTC | 51.0 s | reboot 10 |
+| cam05 | main | 2026-11-20 14:33:31 UTC | 14:34:32 UTC | 61.0 s | reboot 1 |
+| cam05 | main | 2026-11-20 14:37:04 UTC | 14:38:08 UTC | 64.0 s | reboot 2 |
+| cam05 | main | 2026-11-20 14:41:07 UTC | 14:42:11 UTC | 64.0 s | reboot 3 |
+| cam05 | main | 2026-11-20 14:45:10 UTC | 14:46:16 UTC | 66.0 s | reboot 4 |
+| cam05 | main | 2026-11-20 14:49:07 UTC | 14:50:06 UTC | 59.0 s | reboot 5 |
+| cam05 | main | 2026-11-20 14:52:25 UTC | 14:53:25 UTC | 60.0 s | reboot 6 |
+| cam05 | main | 2026-11-20 14:56:17 UTC | 14:57:16 UTC | 59.0 s | reboot 7 |
+| cam05 | main | 2026-11-20 15:00:08 UTC | 15:01:07 UTC | 59.0 s | reboot 8 |
+| cam05 | main | 2026-11-20 15:04:10 UTC | 15:05:09 UTC | 59.0 s | reboot 9 |
+| cam05 | main | 2026-11-20 15:08:09 UTC | 15:09:13 UTC | 64.0 s | reboot 10 |
+| cam05 | substream | 2026-11-20 14:33:35 UTC | 14:34:28 UTC | 53.0 s | reboot 1 |
+| cam05 | substream | 2026-11-20 14:37:13 UTC | 14:38:01 UTC | 48.0 s | reboot 2 |
+| cam05 | substream | 2026-11-20 14:41:17 UTC | 14:42:04 UTC | 47.0 s | reboot 3 |
+| cam05 | substream | 2026-11-20 14:45:21 UTC | 14:46:09 UTC | 48.0 s | reboot 4 |
+| cam05 | substream | 2026-11-20 14:49:09 UTC | 14:49:58 UTC | 49.0 s | reboot 5 |
+| cam05 | substream | 2026-11-20 14:52:32 UTC | 14:53:21 UTC | 49.0 s | reboot 6 |
+| cam05 | substream | 2026-11-20 14:56:21 UTC | 14:57:09 UTC | 48.0 s | reboot 7 |
+| cam05 | substream | 2026-11-20 15:00:12 UTC | 15:01:00 UTC | 48.0 s | reboot 8 |
+| cam05 | substream | 2026-11-20 15:04:15 UTC | 15:05:02 UTC | 47.0 s | reboot 9 |
+| cam05 | substream | 2026-11-20 15:08:18 UTC | 15:09:05 UTC | 47.0 s | reboot 10 |
+| cam06 | main | 2026-11-20 14:33:30 UTC | 14:34:32 UTC | 62.0 s | reboot 1 |
+| cam06 | main | 2026-11-20 14:37:02 UTC | 14:38:08 UTC | 66.0 s | reboot 2 |
+| cam06 | main | 2026-11-20 14:41:07 UTC | 14:42:11 UTC | 64.0 s | reboot 3 |
+| cam06 | main | 2026-11-20 14:45:13 UTC | 14:46:16 UTC | 63.0 s | reboot 4 |
+| cam06 | main | 2026-11-20 14:49:08 UTC | 14:50:06 UTC | 58.0 s | reboot 5 |
+| cam06 | main | 2026-11-20 14:52:25 UTC | 14:53:26 UTC | 61.0 s | reboot 6 |
+| cam06 | main | 2026-11-20 14:56:16 UTC | 14:57:16 UTC | 59.0 s | reboot 7 |
+| cam06 | main | 2026-11-20 15:00:08 UTC | 15:01:07 UTC | 59.0 s | reboot 8 |
+| cam06 | main | 2026-11-20 15:04:05 UTC | 15:05:10 UTC | 64.0 s | reboot 9 |
+| cam06 | main | 2026-11-20 15:08:08 UTC | 15:09:13 UTC | 64.0 s | reboot 10 |
+| cam06 | substream | 2026-11-20 14:33:35 UTC | 14:34:25 UTC | 50.0 s | reboot 1 |
+| cam06 | substream | 2026-11-20 14:37:13 UTC | 14:38:00 UTC | 47.0 s | reboot 2 |
+| cam06 | substream | 2026-11-20 14:41:17 UTC | 14:42:03 UTC | 46.0 s | reboot 3 |
+| cam06 | substream | 2026-11-20 14:45:21 UTC | 14:46:09 UTC | 48.0 s | reboot 4 |
+| cam06 | substream | 2026-11-20 14:49:09 UTC | 14:49:59 UTC | 50.0 s | reboot 5 |
+| cam06 | substream | 2026-11-20 14:52:31 UTC | 14:53:18 UTC | 47.0 s | reboot 6 |
+| cam06 | substream | 2026-11-20 14:56:19 UTC | 14:57:08 UTC | 49.0 s | reboot 7 |
+| cam06 | substream | 2026-11-20 15:00:13 UTC | 15:01:00 UTC | 47.0 s | reboot 8 |
+| cam06 | substream | 2026-11-20 15:04:15 UTC | 15:05:05 UTC | 50.0 s | reboot 9 |
+| cam06 | substream | 2026-11-20 15:08:18 UTC | 15:09:05 UTC | 47.0 s | reboot 10 |
+| cam07 | main | 2026-11-20 14:33:30 UTC | 14:34:32 UTC | 62.0 s | reboot 1 |
+| cam07 | main | 2026-11-20 14:37:02 UTC | 14:38:08 UTC | 66.0 s | reboot 2 |
+| cam07 | main | 2026-11-20 14:41:08 UTC | 14:42:11 UTC | 63.0 s | reboot 3 |
+| cam07 | main | 2026-11-20 14:45:14 UTC | 14:46:16 UTC | 62.0 s | reboot 4 |
+| cam07 | main | 2026-11-20 14:49:08 UTC | 14:50:06 UTC | 58.0 s | reboot 5 |
+| cam07 | main | 2026-11-20 14:52:24 UTC | 14:53:26 UTC | 61.0 s | reboot 6 |
+| cam07 | main | 2026-11-20 14:56:17 UTC | 14:57:16 UTC | 59.0 s | reboot 7 |
+| cam07 | main | 2026-11-20 15:00:08 UTC | 15:01:07 UTC | 59.0 s | reboot 8 |
+| cam07 | main | 2026-11-20 15:04:07 UTC | 15:05:10 UTC | 63.0 s | reboot 9 |
+| cam07 | main | 2026-11-20 15:08:09 UTC | 15:09:13 UTC | 64.0 s | reboot 10 |
+| cam07 | substream | 2026-11-20 14:33:35 UTC | 14:34:25 UTC | 50.0 s | reboot 1 |
+| cam07 | substream | 2026-11-20 14:37:12 UTC | 14:38:01 UTC | 49.0 s | reboot 2 |
+| cam07 | substream | 2026-11-20 14:41:16 UTC | 14:42:04 UTC | 48.0 s | reboot 3 |
+| cam07 | substream | 2026-11-20 14:45:21 UTC | 14:46:09 UTC | 48.0 s | reboot 4 |
+| cam07 | substream | 2026-11-20 14:49:09 UTC | 14:49:58 UTC | 49.0 s | reboot 5 |
+| cam07 | substream | 2026-11-20 14:52:32 UTC | 14:53:21 UTC | 49.0 s | reboot 6 |
+| cam07 | substream | 2026-11-20 14:56:20 UTC | 14:57:08 UTC | 48.0 s | reboot 7 |
+| cam07 | substream | 2026-11-20 15:00:12 UTC | 15:01:00 UTC | 48.0 s | reboot 8 |
+| cam07 | substream | 2026-11-20 15:04:15 UTC | 15:05:02 UTC | 47.0 s | reboot 9 |
+| cam07 | substream | 2026-11-20 15:08:18 UTC | 15:09:05 UTC | 47.0 s | reboot 10 |
+| cam08 | main | 2026-11-20 14:33:30 UTC | 14:34:33 UTC | 63.0 s | reboot 1 |
+| cam08 | main | 2026-11-20 14:37:02 UTC | 14:38:08 UTC | 66.0 s | reboot 2 |
+| cam08 | main | 2026-11-20 14:41:08 UTC | 14:42:11 UTC | 63.0 s | reboot 3 |
+| cam08 | main | 2026-11-20 14:45:10 UTC | 14:46:16 UTC | 65.0 s | reboot 4 |
+| cam08 | main | 2026-11-20 14:49:08 UTC | 14:50:06 UTC | 58.0 s | reboot 5 |
+| cam08 | main | 2026-11-20 14:52:25 UTC | 14:53:26 UTC | 61.0 s | reboot 6 |
+| cam08 | main | 2026-11-20 14:56:18 UTC | 14:57:17 UTC | 59.0 s | reboot 7 |
+| cam08 | main | 2026-11-20 15:00:08 UTC | 15:01:07 UTC | 59.0 s | reboot 8 |
+| cam08 | main | 2026-11-20 15:04:06 UTC | 15:05:10 UTC | 63.0 s | reboot 9 |
+| cam08 | main | 2026-11-20 15:08:09 UTC | 15:09:13 UTC | 64.0 s | reboot 10 |
+| cam08 | substream | 2026-11-20 14:33:35 UTC | 14:34:25 UTC | 50.0 s | reboot 1 |
+| cam08 | substream | 2026-11-20 14:37:12 UTC | 14:38:01 UTC | 49.0 s | reboot 2 |
+| cam08 | substream | 2026-11-20 14:41:17 UTC | 14:42:03 UTC | 46.0 s | reboot 3 |
+| cam08 | substream | 2026-11-20 14:45:22 UTC | 14:46:09 UTC | 47.0 s | reboot 4 |
+| cam08 | substream | 2026-11-20 14:49:09 UTC | 14:49:58 UTC | 49.0 s | reboot 5 |
+| cam08 | substream | 2026-11-20 14:52:31 UTC | 14:53:18 UTC | 47.0 s | reboot 6 |
+| cam08 | substream | 2026-11-20 14:56:20 UTC | 14:57:08 UTC | 48.0 s | reboot 7 |
+| cam08 | substream | 2026-11-20 15:00:12 UTC | 15:01:00 UTC | 48.0 s | reboot 8 |
+| cam08 | substream | 2026-11-20 15:04:15 UTC | 15:05:02 UTC | 47.0 s | reboot 9 |
+| cam08 | substream | 2026-11-20 15:08:18 UTC | 15:09:05 UTC | 47.0 s | reboot 10 |
+| cam09 | main | 2026-11-20 14:33:30 UTC | 14:34:33 UTC | 63.0 s | reboot 1 |
+| cam09 | main | 2026-11-20 14:37:02 UTC | 14:38:08 UTC | 66.0 s | reboot 2 |
+| cam09 | main | 2026-11-20 14:41:08 UTC | 14:42:11 UTC | 63.0 s | reboot 3 |
+| cam09 | main | 2026-11-20 14:45:12 UTC | 14:46:16 UTC | 63.4 s | reboot 4 |
+| cam09 | main | 2026-11-20 14:49:07 UTC | 14:50:06 UTC | 58.0 s | reboot 5 |
+| cam09 | main | 2026-11-20 14:52:25 UTC | 14:53:26 UTC | 61.0 s | reboot 6 |
+| cam09 | main | 2026-11-20 14:56:17 UTC | 14:57:17 UTC | 59.0 s | reboot 7 |
+| cam09 | main | 2026-11-20 15:00:08 UTC | 15:01:07 UTC | 59.0 s | reboot 8 |
+| cam09 | main | 2026-11-20 15:04:07 UTC | 15:05:10 UTC | 63.0 s | reboot 9 |
+| cam09 | main | 2026-11-20 15:08:08 UTC | 15:09:13 UTC | 64.0 s | reboot 10 |
+| cam09 | substream | 2026-11-20 14:33:35 UTC | 14:34:25 UTC | 50.0 s | reboot 1 |
+| cam09 | substream | 2026-11-20 14:37:13 UTC | 14:38:01 UTC | 48.0 s | reboot 2 |
+| cam09 | substream | 2026-11-20 14:41:16 UTC | 14:42:04 UTC | 48.0 s | reboot 3 |
+| cam09 | substream | 2026-11-20 14:45:22 UTC | 14:46:09 UTC | 47.0 s | reboot 4 |
+| cam09 | substream | 2026-11-20 14:49:10 UTC | 14:49:58 UTC | 48.0 s | reboot 5 |
+| cam09 | substream | 2026-11-20 14:52:31 UTC | 14:53:21 UTC | 50.0 s | reboot 6 |
+| cam09 | substream | 2026-11-20 14:56:21 UTC | 14:57:08 UTC | 47.0 s | reboot 7 |
+| cam09 | substream | 2026-11-20 15:00:13 UTC | 15:01:00 UTC | 47.0 s | reboot 8 |
+| cam09 | substream | 2026-11-20 15:04:15 UTC | 15:05:02 UTC | 47.0 s | reboot 9 |
+| cam09 | substream | 2026-11-20 15:08:18 UTC | 15:09:05 UTC | 47.0 s | reboot 10 |
+| cam10 | main | 2026-11-20 14:33:30 UTC | 14:34:33 UTC | 63.0 s | reboot 1 |
+| cam10 | main | 2026-11-20 14:37:02 UTC | 14:38:08 UTC | 66.0 s | reboot 2 |
+| cam10 | main | 2026-11-20 14:41:08 UTC | 14:42:11 UTC | 63.0 s | reboot 3 |
+| cam10 | main | 2026-11-20 14:45:11 UTC | 14:46:17 UTC | 66.0 s | reboot 4 |
+| cam10 | main | 2026-11-20 14:49:08 UTC | 14:50:06 UTC | 58.0 s | reboot 5 |
+| cam10 | main | 2026-11-20 14:52:26 UTC | 14:53:26 UTC | 60.0 s | reboot 6 |
+| cam10 | main | 2026-11-20 14:56:17 UTC | 14:57:17 UTC | 59.0 s | reboot 7 |
+| cam10 | main | 2026-11-20 15:00:08 UTC | 15:01:07 UTC | 59.0 s | reboot 8 |
+| cam10 | main | 2026-11-20 15:04:07 UTC | 15:05:10 UTC | 63.0 s | reboot 9 |
+| cam10 | main | 2026-11-20 15:08:09 UTC | 15:09:13 UTC | 64.0 s | reboot 10 |
+| cam10 | substream | 2026-11-20 14:33:35 UTC | 14:34:25 UTC | 50.0 s | reboot 1 |
+| cam10 | substream | 2026-11-20 14:37:13 UTC | 14:38:00 UTC | 47.0 s | reboot 2 |
+| cam10 | substream | 2026-11-20 14:41:17 UTC | 14:42:03 UTC | 46.0 s | reboot 3 |
+| cam10 | substream | 2026-11-20 14:45:21 UTC | 14:46:09 UTC | 48.0 s | reboot 4 |
+| cam10 | substream | 2026-11-20 14:49:09 UTC | 14:49:58 UTC | 49.0 s | reboot 5 |
+| cam10 | substream | 2026-11-20 14:52:31 UTC | 14:53:18 UTC | 47.0 s | reboot 6 |
+| cam10 | substream | 2026-11-20 14:56:20 UTC | 14:57:08 UTC | 48.0 s | reboot 7 |
+| cam10 | substream | 2026-11-20 15:00:12 UTC | 15:01:00 UTC | 48.0 s | reboot 8 |
+| cam10 | substream | 2026-11-20 15:04:15 UTC | 15:05:02 UTC | 47.0 s | reboot 9 |
+| cam10 | substream | 2026-11-20 15:08:18 UTC | 15:09:05 UTC | 47.0 s | reboot 10 |
+
+## Events
+
+| Event | Camera | At (UTC) | Restored (UTC) | Note |
+|---|---|---|---|---|
+| reboot 1 | all | 2026-11-20 14:33:31 UTC |  | SSH down after 5 s, back after 48 s |
+| reboot 2 | all | 2026-11-20 14:37:09 UTC |  | SSH down after 5 s, back after 47 s |
+| reboot 3 | all | 2026-11-20 14:41:13 UTC |  | SSH down after 5 s, back after 46 s |
+| reboot 4 | all | 2026-11-20 14:45:16 UTC |  | SSH down after 7 s, back after 47 s |
+| reboot 5 | all | 2026-11-20 14:49:06 UTC |  | SSH down after 5 s, back after 48 s |
+| reboot 6 | all | 2026-11-20 14:52:28 UTC |  | SSH down after 5 s, back after 47 s |
+| reboot 7 | all | 2026-11-20 14:56:16 UTC |  | SSH down after 5 s, back after 48 s |
+| reboot 8 | all | 2026-11-20 15:00:08 UTC |  | SSH down after 5 s, back after 47 s |
+| reboot 9 | all | 2026-11-20 15:04:12 UTC |  | SSH down after 5 s, back after 46 s |
+| reboot 10 | all | 2026-11-20 15:08:14 UTC |  | SSH down after 5 s, back after 46 s |
+
+=== m10-reboot: PASS 2/2
+
+settling 300 s before the next step
+
+=== m11-full-disk: recording disk filled to its safe limit (gateway)
+recording disk 19.6% used; 169 main-stream hours, 43112 substream segments
+writing a 20.0 GB filler file
+disk now 21.1% used; running the storage guard with limit 21.127% and target 20.912%
+2026-11-20 15:17:55 recording disk 21.1% used, above the safe limit of 21.127%: deleting the oldest footage down to 20.912%
+2026-11-20 15:18:01 deleted the hour from 2026-11-13 15:00:00 UTC: 1.72 GB (main stream)
+2026-11-20 15:18:07 deleted the hour from 2026-11-13 16:00:00 UTC: 2.13 GB (main stream)
+2026-11-20 15:18:07 recording disk now 20.9% used after deleting 2 hours (3.85 GB)
+PASS  filler pushed the disk over the limit  19.616% -> 21.147% (limit 21.127%)
+PASS  guard brought use down to the target  20.852% after the pass (target 20.912%)
+PASS  main stream: the oldest hours were deleted, in order  deleted 2 hours: 11-13 15:00, 11-13 16:00
+PASS  main stream: the newest hour was kept  2026-11-20 15:00
+PASS  Frigate no longer lists the deleted hours  0 rows left
+PASS  substream: only segments older than the remaining ones were deleted  0 deleted, oldest left 2026-11-17 15:18:00 UTC
+PASS  substream: segments deleted before their retention ended are listed in early-deletions.jsonl  no substream deleted early (the deleted hours had no substream)
+recording for 150 s more to check there was no gap
+PASS  recording carried on through the cleanup with no gap  longest gap 0.0 s main, 0 s substream (15:16:51 to 15:18:39)
+report: /opt/vivo-gateway/reports/m9-pressure-20261120-152041.md
+
+PASS  M9 cleanup protects the system at the safe limit (tests/m9_pressure.py)  m9-pressure-20261120-152041.md
+PASS  after the filler is removed: Frigate answers  
+PASS  after the filler is removed: every camera records both streams  
+PASS  recording filesystem: no errors logged by ext4  errors_count 0
+PASS  OS disk not affected  18% used
+report: /opt/vivo-gateway/reports/m11-full-disk-20261120-152105.md
+m26-exit=0
+=== m11-full-disk: PASS 5/5
+
+settling 300 s before the next step
+
+=== m11-missing-disk: recording disk taken away and given back (gateway)
+$ systemctl stop vivo-gateway.service  -> 0 
+$ umount /srv/vivo  -> 0 
+$ lvchange -an ubuntu-vg/vivo-media  -> 0 
+PASS  recording disk gone (volume off)  /dev/mapper/ubuntu--vg-vivo--media
+$ systemctl start vivo-gateway.service  -> 1 A dependency job for vivo-gateway.service failed. See 'journalctl -xe' for details.
+PASS  the recorder refuses to start without its disk  ervice - Vivo gateway recorder stack (go2rtc + Frigate). / vivo-gateway.service: Job vivo-gateway.service/start failed with result 'dependency'. / srv-vivo.mount: Job srv-vivo.mount/start failed with result 'dependency'.
+PASS  nothing written to the OS disk under the mount point  
+PASS  health endpoint shows the missing disk  camera_offline:cam01, recording_gap:cam01/main, recording_gap:cam01/substream, camera_offline:cam02, recording_gap:cam02/main, recording_gap:cam02/substream
+$ lvchange -ay ubuntu-vg/vivo-media  -> 0 
+volume back on; waiting for vivo-disk-watch.timer to mount it and start the recorder
+PASS  recorder back on its own after the disk returns (no login)  25 s after the volume came back
+PASS  after the disk returned: every camera records both streams  
+report: /opt/vivo-gateway/reports/m11-missing-disk-20261120-152917.md
+m26-exit=0
+=== m11-missing-disk: PASS 6/6
+
+settling 300 s before the next step
+
+=== m11-corrupt: one damaged segment, playback around it (gateway)
+PASS  before the damage, a clip across the segment plays in full  128 s of video for 128 s asked
+PASS  the damaged segment is detected as broken  2026-11-20/15/cam01/12.04.mp4: cut short: 165053 of 275089 bytes
+PASS  a clip across the damaged segment still plays the segments around it  128 s of video (3076 frames) for 128 s asked; 128 s before the damage
+PASS  the HLS playlist across it still loads  12 entries
+PASS  neighbouring segment 2026-11-20/15/cam01/11.52.mp4 plays  plays, 12.0 s
+PASS  neighbouring segment 2026-11-20/15/cam01/12.12.mp4 plays  plays, 12.0 s
+restored /srv/vivo/frigate/media/recordings/2026-11-20/15/cam01/12.04.mp4 (ok)
+PASS  the original segment was put back  2026-11-20/15/cam01/12.04.mp4
+report: /opt/vivo-gateway/reports/m11-corrupt-20261120-153445.md
+m26-exit=0
+=== m11-corrupt: PASS 7/7
+
+settling 300 s before the next step
+
+=== m12-integrity: every segment since the matrix began (gateway)
+cam01: scanning
+  probed 400 of 879 in frigate
+  probed 800 of 879 in frigate
+  probed 879 of 879 in frigate
+  probed 166 of 166 in substream
+cam02: scanning
+  probed 400 of 879 in frigate
+  probed 800 of 879 in frigate
+  probed 879 of 879 in frigate
+  probed 167 of 167 in substream
+cam03: scanning
+  probed 400 of 879 in frigate
+  probed 800 of 879 in frigate
+  probed 879 of 879 in frigate
+  probed 167 of 167 in substream
+cam04: scanning
+  probed 400 of 881 in frigate
+  probed 800 of 881 in frigate
+  probed 881 of 881 in frigate
+  probed 166 of 166 in substream
+cam05: scanning
+  probed 400 of 879 in frigate
+  probed 800 of 879 in frigate
+  probed 879 of 879 in frigate
+  probed 166 of 166 in substream
+cam06: scanning
+  probed 400 of 885 in frigate
+  probed 800 of 885 in frigate
+  probed 885 of 885 in frigate
+  probed 166 of 166 in substream
+cam07: scanning
+  probed 400 of 884 in frigate
+  probed 800 of 884 in frigate
+  probed 884 of 884 in frigate
+  probed 166 of 166 in substream
+cam08: scanning
+  probed 400 of 883 in frigate
+  probed 800 of 883 in frigate
+  probed 883 of 883 in frigate
+  probed 166 of 166 in substream
+cam09: scanning
+  probed 400 of 884 in frigate
+  probed 800 of 884 in frigate
+  probed 884 of 884 in frigate
+  probed 166 of 166 in substream
+cam10: scanning
+  probed 400 of 885 in frigate
+  probed 800 of 885 in frigate
+  probed 885 of 885 in frigate
+  probed 166 of 166 in substream
+PASS  cam01 main: every segment plays or is listed with its cause  879 segments, 0 broken, 0 s missing in 0 intervals
+PASS  cam01 substream: every segment plays or is listed with its cause  166 segments, 0 broken, 0 s missing in 0 intervals
+PASS  cam02 main: every segment plays or is listed with its cause  879 segments, 0 broken, 0 s missing in 0 intervals
+PASS  cam02 substream: every segment plays or is listed with its cause  167 segments, 0 broken, 0 s missing in 0 intervals
+PASS  cam03 main: every segment plays or is listed with its cause  879 segments, 0 broken, 0 s missing in 0 intervals
+PASS  cam03 substream: every segment plays or is listed with its cause  167 segments, 0 broken, 0 s missing in 0 intervals
+PASS  cam04 main: every segment plays or is listed with its cause  881 segments, 0 broken, 0 s missing in 0 intervals
+PASS  cam04 substream: every segment plays or is listed with its cause  166 segments, 0 broken, 0 s missing in 0 intervals
+PASS  cam05 main: every segment plays or is listed with its cause  879 segments, 0 broken, 0 s missing in 0 intervals
+PASS  cam05 substream: every segment plays or is listed with its cause  166 segments, 0 broken, 0 s missing in 0 intervals
+PASS  cam06 main: every segment plays or is listed with its cause  885 segments, 0 broken, 0 s missing in 0 intervals
+PASS  cam06 substream: every segment plays or is listed with its cause  166 segments, 0 broken, 0 s missing in 0 intervals
+PASS  cam07 main: every segment plays or is listed with its cause  884 segments, 0 broken, 0 s missing in 0 intervals
+PASS  cam07 substream: every segment plays or is listed with its cause  166 segments, 0 broken, 0 s missing in 0 intervals
+PASS  cam08 main: every segment plays or is listed with its cause  883 segments, 0 broken, 0 s missing in 0 intervals
+PASS  cam08 substream: every segment plays or is listed with its cause  166 segments, 0 broken, 0 s missing in 0 intervals
+PASS  cam09 main: every segment plays or is listed with its cause  884 segments, 0 broken, 0 s missing in 0 intervals
+PASS  cam09 substream: every segment plays or is listed with its cause  166 segments, 0 broken, 0 s missing in 0 intervals
+PASS  cam10 main: every segment plays or is listed with its cause  885 segments, 0 broken, 0 s missing in 0 intervals
+PASS  cam10 substream: every segment plays or is listed with its cause  166 segments, 0 broken, 0 s missing in 0 intervals
+PASS  gateway clock synchronized to UTC within 2 s (chrony)  Normal, offset +0.000015 s, source 159.203.82.102
+PASS  no segment is written before its own end time (timestamps follow the clock)  
+report: /opt/vivo-gateway/reports/m12-integrity-20261120-154444.md
+m26-exit=0
+=== m12-integrity: PASS 22/22
+
+checking the whole window for gaps outside the steps
+# M26 fault-simulation test matrix (M10, M11, M12)
+
+Gateway `vivo-n150`, full counts from the scope, started 2026-11-20 13:01:26 UTC.
+
+Result: **8 passed, 1 failed**
+
+| # | Step | Module | What | Ran on | Started (UTC) | Minutes | Result | Checks | Report | Failed checks |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | m10-disconnect | M10 | 5 camera disconnects (PoE) | gateway | 2026-11-20 13:01:26 | 14 | PASS | 2/2 | m10-recovery-20261120-131503.md |  |
+| 2 | m11-power | M11 | 10 power cuts (operator switches the power) | workstation | 2026-11-20 13:20:25 | 47 | **FAIL** | 5/6 | m11-power-20261120-140737.md | no substream segment was finished across a power cut |
+| 3 | m10-kill | M10 | Frigate killed 10 times | gateway | 2026-11-20 14:13:03 | 15 | PASS | 2/2 | m10-recovery-20261120-142755.md |  |
+| 4 | m10-reboot | M10 | 10 gateway reboots | workstation | 2026-11-20 14:33:25 | 39 | PASS | 2/2 | m10-recovery-20261120-151222.md |  |
+| 5 | m11-full-disk | M11 | recording disk filled to its safe limit | gateway | 2026-11-20 15:17:47 | 4 | PASS | 5/5 | m11-full-disk-20261120-152105.md |  |
+| 6 | m11-missing-disk | M11 | recording disk taken away and given back | gateway | 2026-11-20 15:26:35 | 3 | PASS | 6/6 | m11-missing-disk-20261120-152917.md |  |
+| 7 | m11-corrupt | M11 | one damaged segment, playback around it | gateway | 2026-11-20 15:34:40 | 0 | PASS | 7/7 | m11-corrupt-20261120-153445.md |  |
+| 8 | m12-integrity | M12 | every segment since the matrix began | gateway | 2026-11-20 15:40:16 | 5 | PASS | 22/22 | m12-integrity-20261120-154444.md |  |
+| 9 | whole window | M10-M12 | no gap outside the steps' windows | gateway | 2026-11-20 13:01:16 | 164 | PASS | 531 gaps, 0 unexplained | this report |  |
+
+## Preflight
+
+| Result | Check | Detail |
+|---|---|---|
+| PASS | SSH to vivo-n150 with a key |  |
+| PASS | passwordless sudo on the gateway |  |
+| PASS | test scripts installed in /opt/vivo-gateway/tests |  |
+| PASS | vivo-gateway, vivo-health and vivo-disk-watch.timer active | active active active |
+| PASS | every camera records both streams |  |
+| PASS | clocks | gateway +1.4 s from this workstation (event times use the gateway's clock) |
+| PASS | PoE control for m10-disconnect | POE_BACKEND=manual: an operator on site unplugs each camera when asked |
+| PASS | recording disk on LVM (m11-missing-disk switches its volume off) | /dev/ubuntu-vg/vivo-media |
+
+## Gaps in the whole window
+
+Every gap in either stream of any camera from the start of the first step to the end of the last; each belongs to the step whose window holds it.
+
+| Camera | Stream | Gap start (UTC) | End | Length | Cause |
+|---|---|---|---|---|---|
+| cam01 | main | 2026-11-20 13:02:23 UTC | 13:03:19 UTC | 55.3 s | m10-disconnect |
+| cam01 | main | 2026-11-20 13:22:29 UTC | 13:23:55 UTC | 85.0 s | m11-power |
+| cam01 | main | 2026-11-20 13:31:55 UTC | 13:33:03 UTC | 68.0 s | m11-power |
+| cam01 | main | 2026-11-20 13:35:35 UTC | 13:36:42 UTC | 67.0 s | m11-power |
+| cam01 | main | 2026-11-20 13:39:22 UTC | 13:40:27 UTC | 65.0 s | m11-power |
+| cam01 | main | 2026-11-20 13:43:27 UTC | 13:44:48 UTC | 81.0 s | m11-power |
+| cam01 | main | 2026-11-20 13:47:40 UTC | 13:48:51 UTC | 71.0 s | m11-power |
+| cam01 | main | 2026-11-20 13:51:29 UTC | 13:52:35 UTC | 65.0 s | m11-power |
+| cam01 | main | 2026-11-20 13:55:26 UTC | 13:56:33 UTC | 67.0 s | m11-power |
+| cam01 | main | 2026-11-20 13:59:25 UTC | 14:00:32 UTC | 67.0 s | m11-power |
+| cam01 | main | 2026-11-20 14:03:23 UTC | 14:04:33 UTC | 70.0 s | m11-power |
+| cam01 | main | 2026-11-20 14:13:04 UTC | 14:13:14 UTC | 10.0 s | m10-kill |
+| cam01 | main | 2026-11-20 14:14:25 UTC | 14:14:37 UTC | 12.0 s | m10-kill |
+| cam01 | main | 2026-11-20 14:15:48 UTC | 14:15:59 UTC | 11.0 s | m10-kill |
+| cam01 | main | 2026-11-20 14:17:11 UTC | 14:17:22 UTC | 11.0 s | m10-kill |
+| cam01 | main | 2026-11-20 14:18:34 UTC | 14:18:45 UTC | 11.0 s | m10-kill |
+| cam01 | main | 2026-11-20 14:19:57 UTC | 14:20:08 UTC | 11.0 s | m10-kill |
+| cam01 | main | 2026-11-20 14:21:20 UTC | 14:21:31 UTC | 11.0 s | m10-kill |
+| cam01 | main | 2026-11-20 14:22:41 UTC | 14:22:54 UTC | 12.0 s | m10-kill |
+| cam01 | main | 2026-11-20 14:24:05 UTC | 14:24:16 UTC | 11.0 s | m10-kill |
+| cam01 | main | 2026-11-20 14:25:28 UTC | 14:25:40 UTC | 12.0 s | m10-kill |
+| cam01 | main | 2026-11-20 14:33:30 UTC | 14:34:32 UTC | 61.0 s | m10-reboot |
+| cam01 | main | 2026-11-20 14:37:04 UTC | 14:38:07 UTC | 63.0 s | m10-reboot |
+| cam01 | main | 2026-11-20 14:41:06 UTC | 14:42:10 UTC | 63.0 s | m10-reboot |
+| cam01 | main | 2026-11-20 14:45:10 UTC | 14:46:16 UTC | 66.0 s | m10-reboot |
+| cam01 | main | 2026-11-20 14:49:07 UTC | 14:50:05 UTC | 58.0 s | m10-reboot |
+| cam01 | main | 2026-11-20 14:52:23 UTC | 14:53:25 UTC | 61.0 s | m10-reboot |
+| cam01 | main | 2026-11-20 14:56:17 UTC | 14:57:16 UTC | 59.0 s | m10-reboot |
+| cam01 | main | 2026-11-20 15:00:07 UTC | 15:01:07 UTC | 60.0 s | m10-reboot |
+| cam01 | main | 2026-11-20 15:04:05 UTC | 15:05:09 UTC | 63.0 s | m10-reboot |
+| cam01 | main | 2026-11-20 15:08:08 UTC | 15:09:12 UTC | 64.0 s | m10-reboot |
+| cam01 | main | 2026-11-20 15:26:31 UTC | 15:28:57 UTC | 145.0 s | m11-missing-disk |
+| cam01 | substream | 2026-11-20 13:02:23 UTC | 13:03:36 UTC | 73.0 s | m10-disconnect |
+| cam01 | substream | 2026-11-20 13:22:00 UTC | 13:23:39 UTC | 99.0 s | m11-power |
+| cam01 | substream | 2026-11-20 13:32:01 UTC | 13:32:56 UTC | 55.0 s | m11-power |
+| cam01 | substream | 2026-11-20 13:35:03 UTC | 13:36:35 UTC | 92.0 s | m11-power |
+| cam01 | substream | 2026-11-20 13:39:02 UTC | 13:40:20 UTC | 78.0 s | m11-power |
+| cam01 | substream | 2026-11-20 13:43:03 UTC | 13:44:40 UTC | 97.0 s | m11-power |
+| cam01 | substream | 2026-11-20 13:47:00 UTC | 13:48:43 UTC | 103.0 s | m11-power |
+| cam01 | substream | 2026-11-20 13:51:02 UTC | 13:52:26 UTC | 84.0 s | m11-power |
+| cam01 | substream | 2026-11-20 13:55:02 UTC | 13:56:25 UTC | 83.0 s | m11-power |
+| cam01 | substream | 2026-11-20 13:59:01 UTC | 14:00:24 UTC | 83.0 s | m11-power |
+| cam01 | substream | 2026-11-20 14:03:03 UTC | 14:04:25 UTC | 82.0 s | m11-power |
+| cam01 | substream | 2026-11-20 14:33:36 UTC | 14:34:25 UTC | 49.0 s | m10-reboot |
+| cam01 | substream | 2026-11-20 14:37:12 UTC | 14:38:01 UTC | 49.0 s | m10-reboot |
+| cam01 | substream | 2026-11-20 14:41:16 UTC | 14:42:03 UTC | 47.0 s | m10-reboot |
+| cam01 | substream | 2026-11-20 14:45:22 UTC | 14:46:09 UTC | 47.0 s | m10-reboot |
+| cam01 | substream | 2026-11-20 14:49:09 UTC | 14:49:58 UTC | 49.0 s | m10-reboot |
+| cam01 | substream | 2026-11-20 14:52:32 UTC | 14:53:18 UTC | 46.0 s | m10-reboot |
+| cam01 | substream | 2026-11-20 14:56:20 UTC | 14:57:08 UTC | 48.0 s | m10-reboot |
+| cam01 | substream | 2026-11-20 15:00:12 UTC | 15:01:00 UTC | 48.0 s | m10-reboot |
+| cam01 | substream | 2026-11-20 15:04:16 UTC | 15:05:02 UTC | 46.0 s | m10-reboot |
+| cam01 | substream | 2026-11-20 15:08:18 UTC | 15:09:05 UTC | 47.0 s | m10-reboot |
+| cam01 | substream | 2026-11-20 15:26:39 UTC | 15:28:52 UTC | 133.0 s | m11-missing-disk |
+| cam02 | main | 2026-11-20 13:04:52 UTC | 13:05:43 UTC | 50.5 s | m10-disconnect |
+| cam02 | main | 2026-11-20 13:22:23 UTC | 13:23:55 UTC | 92.0 s | m11-power |
+| cam02 | main | 2026-11-20 13:31:55 UTC | 13:33:04 UTC | 69.0 s | m11-power |
+| cam02 | main | 2026-11-20 13:35:35 UTC | 13:36:42 UTC | 67.0 s | m11-power |
+| cam02 | main | 2026-11-20 13:39:22 UTC | 13:40:28 UTC | 66.0 s | m11-power |
+| cam02 | main | 2026-11-20 13:43:27 UTC | 13:44:48 UTC | 81.0 s | m11-power |
+| cam02 | main | 2026-11-20 13:47:40 UTC | 13:48:51 UTC | 71.0 s | m11-power |
+| cam02 | main | 2026-11-20 13:51:30 UTC | 13:52:35 UTC | 65.0 s | m11-power |
+| cam02 | main | 2026-11-20 13:55:26 UTC | 13:56:33 UTC | 67.0 s | m11-power |
+| cam02 | main | 2026-11-20 13:59:25 UTC | 14:00:32 UTC | 67.0 s | m11-power |
+| cam02 | main | 2026-11-20 14:03:23 UTC | 14:04:33 UTC | 70.0 s | m11-power |
+| cam02 | main | 2026-11-20 14:13:05 UTC | 14:13:14 UTC | 9.0 s | m10-kill |
+| cam02 | main | 2026-11-20 14:14:25 UTC | 14:14:37 UTC | 12.0 s | m10-kill |
+| cam02 | main | 2026-11-20 14:15:48 UTC | 14:15:59 UTC | 11.0 s | m10-kill |
+| cam02 | main | 2026-11-20 14:17:10 UTC | 14:17:23 UTC | 12.0 s | m10-kill |
+| cam02 | main | 2026-11-20 14:18:34 UTC | 14:18:45 UTC | 11.0 s | m10-kill |
+| cam02 | main | 2026-11-20 14:19:57 UTC | 14:20:09 UTC | 12.0 s | m10-kill |
+| cam02 | main | 2026-11-20 14:21:19 UTC | 14:21:31 UTC | 11.0 s | m10-kill |
+| cam02 | main | 2026-11-20 14:22:42 UTC | 14:22:54 UTC | 12.0 s | m10-kill |
+| cam02 | main | 2026-11-20 14:24:05 UTC | 14:24:17 UTC | 12.0 s | m10-kill |
+| cam02 | main | 2026-11-20 14:25:28 UTC | 14:25:40 UTC | 12.0 s | m10-kill |
+| cam02 | main | 2026-11-20 14:33:31 UTC | 14:34:32 UTC | 61.0 s | m10-reboot |
+| cam02 | main | 2026-11-20 14:37:04 UTC | 14:38:07 UTC | 63.0 s | m10-reboot |
+| cam02 | main | 2026-11-20 14:41:06 UTC | 14:42:10 UTC | 63.0 s | m10-reboot |
+| cam02 | main | 2026-11-20 14:45:10 UTC | 14:46:16 UTC | 66.0 s | m10-reboot |
+| cam02 | main | 2026-11-20 14:49:06 UTC | 14:50:05 UTC | 58.0 s | m10-reboot |
+| cam02 | main | 2026-11-20 14:52:25 UTC | 14:53:25 UTC | 60.0 s | m10-reboot |
+| cam02 | main | 2026-11-20 14:56:17 UTC | 14:57:16 UTC | 59.0 s | m10-reboot |
+| cam02 | main | 2026-11-20 15:00:06 UTC | 15:01:07 UTC | 60.0 s | m10-reboot |
+| cam02 | main | 2026-11-20 15:04:06 UTC | 15:05:09 UTC | 63.0 s | m10-reboot |
+| cam02 | main | 2026-11-20 15:08:08 UTC | 15:09:12 UTC | 64.0 s | m10-reboot |
+| cam02 | main | 2026-11-20 15:26:32 UTC | 15:28:57 UTC | 145.0 s | m11-missing-disk |
+| cam02 | substream | 2026-11-20 13:04:52 UTC | 13:05:59 UTC | 67.0 s | m10-disconnect |
+| cam02 | substream | 2026-11-20 13:22:03 UTC | 13:23:39 UTC | 96.0 s | m11-power |
+| cam02 | substream | 2026-11-20 13:32:01 UTC | 13:32:56 UTC | 55.0 s | m11-power |
+| cam02 | substream | 2026-11-20 13:35:03 UTC | 13:36:38 UTC | 95.0 s | m11-power |
+| cam02 | substream | 2026-11-20 13:39:02 UTC | 13:40:20 UTC | 78.0 s | m11-power |
+| cam02 | substream | 2026-11-20 13:43:03 UTC | 13:44:40 UTC | 97.0 s | m11-power |
+| cam02 | substream | 2026-11-20 13:47:00 UTC | 13:48:43 UTC | 103.0 s | m11-power |
+| cam02 | substream | 2026-11-20 13:51:03 UTC | 13:52:27 UTC | 84.0 s | m11-power |
+| cam02 | substream | 2026-11-20 13:55:02 UTC | 13:56:25 UTC | 83.0 s | m11-power |
+| cam02 | substream | 2026-11-20 13:59:01 UTC | 14:00:24 UTC | 83.0 s | m11-power |
+| cam02 | substream | 2026-11-20 14:03:03 UTC | 14:04:25 UTC | 82.0 s | m11-power |
+| cam02 | substream | 2026-11-20 14:33:35 UTC | 14:34:25 UTC | 50.0 s | m10-reboot |
+| cam02 | substream | 2026-11-20 14:37:12 UTC | 14:38:03 UTC | 51.0 s | m10-reboot |
+| cam02 | substream | 2026-11-20 14:41:17 UTC | 14:42:04 UTC | 47.0 s | m10-reboot |
+| cam02 | substream | 2026-11-20 14:45:21 UTC | 14:46:09 UTC | 48.0 s | m10-reboot |
+| cam02 | substream | 2026-11-20 14:49:10 UTC | 14:49:58 UTC | 48.0 s | m10-reboot |
+| cam02 | substream | 2026-11-20 14:52:31 UTC | 14:53:21 UTC | 50.0 s | m10-reboot |
+| cam02 | substream | 2026-11-20 14:56:20 UTC | 14:57:09 UTC | 49.0 s | m10-reboot |
+| cam02 | substream | 2026-11-20 15:00:12 UTC | 15:00:59 UTC | 47.0 s | m10-reboot |
+| cam02 | substream | 2026-11-20 15:04:16 UTC | 15:05:05 UTC | 49.0 s | m10-reboot |
+| cam02 | substream | 2026-11-20 15:08:18 UTC | 15:09:05 UTC | 47.0 s | m10-reboot |
+| cam02 | substream | 2026-11-20 15:26:39 UTC | 15:28:51 UTC | 132.0 s | m11-missing-disk |
+| cam03 | main | 2026-11-20 13:07:14 UTC | 13:08:06 UTC | 51.7 s | m10-disconnect |
+| cam03 | main | 2026-11-20 13:22:25 UTC | 13:23:56 UTC | 91.0 s | m11-power |
+| cam03 | main | 2026-11-20 13:31:55 UTC | 13:33:04 UTC | 69.0 s | m11-power |
+| cam03 | main | 2026-11-20 13:35:34 UTC | 13:36:42 UTC | 67.0 s | m11-power |
+| cam03 | main | 2026-11-20 13:39:22 UTC | 13:40:28 UTC | 66.0 s | m11-power |
+| cam03 | main | 2026-11-20 13:43:27 UTC | 13:44:48 UTC | 81.0 s | m11-power |
+| cam03 | main | 2026-11-20 13:47:40 UTC | 13:48:51 UTC | 71.0 s | m11-power |
+| cam03 | main | 2026-11-20 13:51:30 UTC | 13:52:35 UTC | 65.0 s | m11-power |
+| cam03 | main | 2026-11-20 13:55:26 UTC | 13:56:34 UTC | 68.0 s | m11-power |
+| cam03 | main | 2026-11-20 13:59:24 UTC | 14:00:32 UTC | 67.0 s | m11-power |
+| cam03 | main | 2026-11-20 14:03:24 UTC | 14:04:33 UTC | 69.0 s | m11-power |
+| cam03 | main | 2026-11-20 14:13:05 UTC | 14:13:14 UTC | 9.0 s | m10-kill |
+| cam03 | main | 2026-11-20 14:14:25 UTC | 14:14:37 UTC | 12.0 s | m10-kill |
+| cam03 | main | 2026-11-20 14:15:48 UTC | 14:15:59 UTC | 11.0 s | m10-kill |
+| cam03 | main | 2026-11-20 14:17:11 UTC | 14:17:23 UTC | 12.0 s | m10-kill |
+| cam03 | main | 2026-11-20 14:18:34 UTC | 14:18:46 UTC | 12.0 s | m10-kill |
+| cam03 | main | 2026-11-20 14:19:57 UTC | 14:20:09 UTC | 12.0 s | m10-kill |
+| cam03 | main | 2026-11-20 14:21:20 UTC | 14:21:31 UTC | 11.0 s | m10-kill |
+| cam03 | main | 2026-11-20 14:22:42 UTC | 14:22:54 UTC | 12.0 s | m10-kill |
+| cam03 | main | 2026-11-20 14:24:05 UTC | 14:24:17 UTC | 12.0 s | m10-kill |
+| cam03 | main | 2026-11-20 14:25:28 UTC | 14:25:40 UTC | 12.0 s | m10-kill |
+| cam03 | main | 2026-11-20 14:33:31 UTC | 14:34:32 UTC | 61.0 s | m10-reboot |
+| cam03 | main | 2026-11-20 14:37:04 UTC | 14:38:08 UTC | 64.0 s | m10-reboot |
+| cam03 | main | 2026-11-20 14:41:07 UTC | 14:42:11 UTC | 64.0 s | m10-reboot |
+| cam03 | main | 2026-11-20 14:45:10 UTC | 14:46:16 UTC | 66.0 s | m10-reboot |
+| cam03 | main | 2026-11-20 14:49:07 UTC | 14:50:05 UTC | 58.0 s | m10-reboot |
+| cam03 | main | 2026-11-20 14:52:25 UTC | 14:53:25 UTC | 60.0 s | m10-reboot |
+| cam03 | main | 2026-11-20 14:56:17 UTC | 14:57:16 UTC | 59.0 s | m10-reboot |
+| cam03 | main | 2026-11-20 15:00:07 UTC | 15:01:07 UTC | 60.0 s | m10-reboot |
+| cam03 | main | 2026-11-20 15:04:06 UTC | 15:05:09 UTC | 63.0 s | m10-reboot |
+| cam03 | main | 2026-11-20 15:08:09 UTC | 15:09:12 UTC | 63.0 s | m10-reboot |
+| cam03 | main | 2026-11-20 15:26:32 UTC | 15:28:57 UTC | 145.0 s | m11-missing-disk |
+| cam03 | substream | 2026-11-20 13:07:14 UTC | 13:08:25 UTC | 71.0 s | m10-disconnect |
+| cam03 | substream | 2026-11-20 13:22:01 UTC | 13:23:39 UTC | 98.0 s | m11-power |
+| cam03 | substream | 2026-11-20 13:32:01 UTC | 13:32:56 UTC | 55.0 s | m11-power |
+| cam03 | substream | 2026-11-20 13:35:03 UTC | 13:36:35 UTC | 92.0 s | m11-power |
+| cam03 | substream | 2026-11-20 13:39:02 UTC | 13:40:20 UTC | 78.0 s | m11-power |
+| cam03 | substream | 2026-11-20 13:43:03 UTC | 13:44:40 UTC | 97.0 s | m11-power |
+| cam03 | substream | 2026-11-20 13:47:00 UTC | 13:48:43 UTC | 103.0 s | m11-power |
+| cam03 | substream | 2026-11-20 13:51:02 UTC | 13:52:27 UTC | 85.0 s | m11-power |
+| cam03 | substream | 2026-11-20 13:55:02 UTC | 13:56:26 UTC | 84.0 s | m11-power |
+| cam03 | substream | 2026-11-20 13:59:01 UTC | 14:00:24 UTC | 83.0 s | m11-power |
+| cam03 | substream | 2026-11-20 14:03:03 UTC | 14:04:25 UTC | 82.0 s | m11-power |
+| cam03 | substream | 2026-11-20 14:33:35 UTC | 14:34:25 UTC | 50.0 s | m10-reboot |
+| cam03 | substream | 2026-11-20 14:37:12 UTC | 14:38:01 UTC | 49.0 s | m10-reboot |
+| cam03 | substream | 2026-11-20 14:41:16 UTC | 14:42:04 UTC | 48.0 s | m10-reboot |
+| cam03 | substream | 2026-11-20 14:45:21 UTC | 14:46:12 UTC | 51.0 s | m10-reboot |
+| cam03 | substream | 2026-11-20 14:49:10 UTC | 14:49:58 UTC | 48.0 s | m10-reboot |
+| cam03 | substream | 2026-11-20 14:52:31 UTC | 14:53:18 UTC | 47.0 s | m10-reboot |
+| cam03 | substream | 2026-11-20 14:56:20 UTC | 14:57:08 UTC | 48.0 s | m10-reboot |
+| cam03 | substream | 2026-11-20 15:00:12 UTC | 15:00:59 UTC | 47.0 s | m10-reboot |
+| cam03 | substream | 2026-11-20 15:04:16 UTC | 15:05:02 UTC | 46.0 s | m10-reboot |
+| cam03 | substream | 2026-11-20 15:08:18 UTC | 15:09:08 UTC | 50.0 s | m10-reboot |
+| cam03 | substream | 2026-11-20 15:26:38 UTC | 15:28:52 UTC | 134.0 s | m11-missing-disk |
+| cam04 | main | 2026-11-20 13:09:33 UTC | 13:09:53 UTC | 20.0 s | m10-disconnect |
+| cam04 | main | 2026-11-20 13:09:53 UTC | 13:10:19 UTC | 25.7 s | m10-disconnect |
+| cam04 | main | 2026-11-20 13:22:30 UTC | 13:23:56 UTC | 86.0 s | m11-power |
+| cam04 | main | 2026-11-20 13:31:55 UTC | 13:33:04 UTC | 69.0 s | m11-power |
+| cam04 | main | 2026-11-20 13:35:35 UTC | 13:36:42 UTC | 67.0 s | m11-power |
+| cam04 | main | 2026-11-20 13:39:22 UTC | 13:40:28 UTC | 66.0 s | m11-power |
+| cam04 | main | 2026-11-20 13:43:27 UTC | 13:44:49 UTC | 82.0 s | m11-power |
+| cam04 | main | 2026-11-20 13:47:39 UTC | 13:48:51 UTC | 71.0 s | m11-power |
+| cam04 | main | 2026-11-20 13:51:31 UTC | 13:52:35 UTC | 64.0 s | m11-power |
+| cam04 | main | 2026-11-20 13:55:26 UTC | 13:56:34 UTC | 67.0 s | m11-power |
+| cam04 | main | 2026-11-20 13:59:24 UTC | 14:00:32 UTC | 67.0 s | m11-power |
+| cam04 | main | 2026-11-20 14:03:24 UTC | 14:04:33 UTC | 69.0 s | m11-power |
+| cam04 | main | 2026-11-20 14:13:05 UTC | 14:13:14 UTC | 9.0 s | m10-kill |
+| cam04 | main | 2026-11-20 14:14:26 UTC | 14:14:37 UTC | 11.0 s | m10-kill |
+| cam04 | main | 2026-11-20 14:15:48 UTC | 14:16:00 UTC | 12.0 s | m10-kill |
+| cam04 | main | 2026-11-20 14:17:10 UTC | 14:17:23 UTC | 12.0 s | m10-kill |
+| cam04 | main | 2026-11-20 14:18:34 UTC | 14:18:46 UTC | 12.0 s | m10-kill |
+| cam04 | main | 2026-11-20 14:19:57 UTC | 14:20:09 UTC | 12.0 s | m10-kill |
+| cam04 | main | 2026-11-20 14:21:19 UTC | 14:21:31 UTC | 11.0 s | m10-kill |
+| cam04 | main | 2026-11-20 14:22:43 UTC | 14:22:54 UTC | 11.0 s | m10-kill |
+| cam04 | main | 2026-11-20 14:24:06 UTC | 14:24:17 UTC | 11.0 s | m10-kill |
+| cam04 | main | 2026-11-20 14:25:27 UTC | 14:25:40 UTC | 12.0 s | m10-kill |
+| cam04 | main | 2026-11-20 14:33:31 UTC | 14:34:32 UTC | 61.0 s | m10-reboot |
+| cam04 | main | 2026-11-20 14:37:04 UTC | 14:38:08 UTC | 64.0 s | m10-reboot |
+| cam04 | main | 2026-11-20 14:41:07 UTC | 14:42:11 UTC | 64.0 s | m10-reboot |
+| cam04 | main | 2026-11-20 14:45:10 UTC | 14:46:16 UTC | 66.0 s | m10-reboot |
+| cam04 | main | 2026-11-20 14:49:06 UTC | 14:50:05 UTC | 58.0 s | m10-reboot |
+| cam04 | main | 2026-11-20 14:52:25 UTC | 14:53:25 UTC | 60.0 s | m10-reboot |
+| cam04 | main | 2026-11-20 14:56:16 UTC | 14:57:16 UTC | 59.0 s | m10-reboot |
+| cam04 | main | 2026-11-20 15:00:06 UTC | 15:01:07 UTC | 60.0 s | m10-reboot |
+| cam04 | main | 2026-11-20 15:04:06 UTC | 15:05:09 UTC | 63.0 s | m10-reboot |
+| cam04 | main | 2026-11-20 15:08:09 UTC | 15:09:13 UTC | 64.0 s | m10-reboot |
+| cam04 | main | 2026-11-20 15:26:32 UTC | 15:28:57 UTC | 145.0 s | m11-missing-disk |
+| cam04 | substream | 2026-11-20 13:09:33 UTC | 13:10:20 UTC | 47.0 s | m10-disconnect |
+| cam04 | substream | 2026-11-20 13:22:04 UTC | 13:23:39 UTC | 95.0 s | m11-power |
+| cam04 | substream | 2026-11-20 13:32:01 UTC | 13:32:56 UTC | 55.0 s | m11-power |
+| cam04 | substream | 2026-11-20 13:35:02 UTC | 13:36:35 UTC | 93.0 s | m11-power |
+| cam04 | substream | 2026-11-20 13:39:02 UTC | 13:40:20 UTC | 78.0 s | m11-power |
+| cam04 | substream | 2026-11-20 13:43:03 UTC | 13:44:40 UTC | 97.0 s | m11-power |
+| cam04 | substream | 2026-11-20 13:47:00 UTC | 13:48:43 UTC | 103.0 s | m11-power |
+| cam04 | substream | 2026-11-20 13:51:02 UTC | 13:52:27 UTC | 85.0 s | m11-power |
+| cam04 | substream | 2026-11-20 13:55:02 UTC | 13:56:26 UTC | 84.0 s | m11-power |
+| cam04 | substream | 2026-11-20 13:59:01 UTC | 14:00:24 UTC | 83.0 s | m11-power |
+| cam04 | substream | 2026-11-20 14:03:03 UTC | 14:04:25 UTC | 82.0 s | m11-power |
+| cam04 | substream | 2026-11-20 14:33:35 UTC | 14:34:25 UTC | 50.0 s | m10-reboot |
+| cam04 | substream | 2026-11-20 14:37:12 UTC | 14:38:01 UTC | 49.0 s | m10-reboot |
+| cam04 | substream | 2026-11-20 14:41:16 UTC | 14:42:04 UTC | 48.0 s | m10-reboot |
+| cam04 | substream | 2026-11-20 14:45:21 UTC | 14:46:09 UTC | 48.0 s | m10-reboot |
+| cam04 | substream | 2026-11-20 14:49:09 UTC | 14:49:58 UTC | 49.0 s | m10-reboot |
+| cam04 | substream | 2026-11-20 14:52:31 UTC | 14:53:18 UTC | 47.0 s | m10-reboot |
+| cam04 | substream | 2026-11-20 14:56:21 UTC | 14:57:08 UTC | 47.0 s | m10-reboot |
+| cam04 | substream | 2026-11-20 15:00:12 UTC | 15:01:00 UTC | 48.0 s | m10-reboot |
+| cam04 | substream | 2026-11-20 15:04:15 UTC | 15:05:02 UTC | 47.0 s | m10-reboot |
+| cam04 | substream | 2026-11-20 15:08:17 UTC | 15:09:08 UTC | 51.0 s | m10-reboot |
+| cam04 | substream | 2026-11-20 15:26:38 UTC | 15:28:52 UTC | 134.0 s | m11-missing-disk |
+| cam05 | main | 2026-11-20 13:11:55 UTC | 13:12:45 UTC | 49.3 s | m10-disconnect |
+| cam05 | main | 2026-11-20 13:22:24 UTC | 13:23:56 UTC | 92.0 s | m11-power |
+| cam05 | main | 2026-11-20 13:31:55 UTC | 13:33:04 UTC | 69.0 s | m11-power |
+| cam05 | main | 2026-11-20 13:35:35 UTC | 13:36:43 UTC | 68.0 s | m11-power |
+| cam05 | main | 2026-11-20 13:39:22 UTC | 13:40:28 UTC | 66.0 s | m11-power |
+| cam05 | main | 2026-11-20 13:43:27 UTC | 13:44:49 UTC | 82.0 s | m11-power |
+| cam05 | main | 2026-11-20 13:47:40 UTC | 13:48:51 UTC | 71.0 s | m11-power |
+| cam05 | main | 2026-11-20 13:51:30 UTC | 13:52:35 UTC | 64.0 s | m11-power |
+| cam05 | main | 2026-11-20 13:55:27 UTC | 13:56:34 UTC | 67.0 s | m11-power |
+| cam05 | main | 2026-11-20 13:59:25 UTC | 14:00:33 UTC | 68.0 s | m11-power |
+| cam05 | main | 2026-11-20 14:03:24 UTC | 14:04:33 UTC | 69.0 s | m11-power |
+| cam05 | main | 2026-11-20 14:13:05 UTC | 14:13:14 UTC | 9.0 s | m10-kill |
+| cam05 | main | 2026-11-20 14:14:26 UTC | 14:14:37 UTC | 11.0 s | m10-kill |
+| cam05 | main | 2026-11-20 14:15:49 UTC | 14:16:00 UTC | 11.0 s | m10-kill |
+| cam05 | main | 2026-11-20 14:17:11 UTC | 14:17:23 UTC | 12.0 s | m10-kill |
+| cam05 | main | 2026-11-20 14:18:34 UTC | 14:18:46 UTC | 12.0 s | m10-kill |
+| cam05 | main | 2026-11-20 14:19:57 UTC | 14:20:09 UTC | 12.0 s | m10-kill |
+| cam05 | main | 2026-11-20 14:21:20 UTC | 14:21:31 UTC | 11.0 s | m10-kill |
+| cam05 | main | 2026-11-20 14:22:43 UTC | 14:22:54 UTC | 11.0 s | m10-kill |
+| cam05 | main | 2026-11-20 14:24:06 UTC | 14:24:17 UTC | 11.0 s | m10-kill |
+| cam05 | main | 2026-11-20 14:25:28 UTC | 14:25:40 UTC | 12.0 s | m10-kill |
+| cam05 | main | 2026-11-20 14:33:31 UTC | 14:34:32 UTC | 61.0 s | m10-reboot |
+| cam05 | main | 2026-11-20 14:37:04 UTC | 14:38:08 UTC | 64.0 s | m10-reboot |
+| cam05 | main | 2026-11-20 14:41:07 UTC | 14:42:11 UTC | 64.0 s | m10-reboot |
+| cam05 | main | 2026-11-20 14:45:10 UTC | 14:46:16 UTC | 66.0 s | m10-reboot |
+| cam05 | main | 2026-11-20 14:49:07 UTC | 14:50:06 UTC | 59.0 s | m10-reboot |
+| cam05 | main | 2026-11-20 14:52:25 UTC | 14:53:25 UTC | 60.0 s | m10-reboot |
+| cam05 | main | 2026-11-20 14:56:17 UTC | 14:57:16 UTC | 59.0 s | m10-reboot |
+| cam05 | main | 2026-11-20 15:00:08 UTC | 15:01:07 UTC | 59.0 s | m10-reboot |
+| cam05 | main | 2026-11-20 15:04:10 UTC | 15:05:09 UTC | 59.0 s | m10-reboot |
+| cam05 | main | 2026-11-20 15:08:09 UTC | 15:09:13 UTC | 64.0 s | m10-reboot |
+| cam05 | main | 2026-11-20 15:26:32 UTC | 15:28:57 UTC | 145.0 s | m11-missing-disk |
+| cam05 | substream | 2026-11-20 13:11:56 UTC | 13:12:47 UTC | 51.0 s | m10-disconnect |
+| cam05 | substream | 2026-11-20 13:22:02 UTC | 13:23:39 UTC | 97.0 s | m11-power |
+| cam05 | substream | 2026-11-20 13:32:01 UTC | 13:32:56 UTC | 55.0 s | m11-power |
+| cam05 | substream | 2026-11-20 13:35:03 UTC | 13:36:35 UTC | 92.0 s | m11-power |
+| cam05 | substream | 2026-11-20 13:39:02 UTC | 13:40:20 UTC | 78.0 s | m11-power |
+| cam05 | substream | 2026-11-20 13:43:03 UTC | 13:44:40 UTC | 97.0 s | m11-power |
+| cam05 | substream | 2026-11-20 13:47:00 UTC | 13:48:43 UTC | 103.0 s | m11-power |
+| cam05 | substream | 2026-11-20 13:51:02 UTC | 13:52:26 UTC | 84.0 s | m11-power |
+| cam05 | substream | 2026-11-20 13:55:02 UTC | 13:56:25 UTC | 83.0 s | m11-power |
+| cam05 | substream | 2026-11-20 13:59:01 UTC | 14:00:24 UTC | 83.0 s | m11-power |
+| cam05 | substream | 2026-11-20 14:03:03 UTC | 14:04:25 UTC | 82.0 s | m11-power |
+| cam05 | substream | 2026-11-20 14:33:35 UTC | 14:34:28 UTC | 53.0 s | m10-reboot |
+| cam05 | substream | 2026-11-20 14:37:13 UTC | 14:38:01 UTC | 48.0 s | m10-reboot |
+| cam05 | substream | 2026-11-20 14:41:17 UTC | 14:42:04 UTC | 47.0 s | m10-reboot |
+| cam05 | substream | 2026-11-20 14:45:21 UTC | 14:46:09 UTC | 48.0 s | m10-reboot |
+| cam05 | substream | 2026-11-20 14:49:09 UTC | 14:49:58 UTC | 49.0 s | m10-reboot |
+| cam05 | substream | 2026-11-20 14:52:32 UTC | 14:53:21 UTC | 49.0 s | m10-reboot |
+| cam05 | substream | 2026-11-20 14:56:21 UTC | 14:57:09 UTC | 48.0 s | m10-reboot |
+| cam05 | substream | 2026-11-20 15:00:12 UTC | 15:01:00 UTC | 48.0 s | m10-reboot |
+| cam05 | substream | 2026-11-20 15:04:15 UTC | 15:05:02 UTC | 47.0 s | m10-reboot |
+| cam05 | substream | 2026-11-20 15:08:18 UTC | 15:09:05 UTC | 47.0 s | m10-reboot |
+| cam05 | substream | 2026-11-20 15:26:39 UTC | 15:28:52 UTC | 133.0 s | m11-missing-disk |
+| cam06 | main | 2026-11-20 13:22:26 UTC | 13:23:56 UTC | 90.0 s | m11-power |
+| cam06 | main | 2026-11-20 13:31:55 UTC | 13:33:04 UTC | 69.0 s | m11-power |
+| cam06 | main | 2026-11-20 13:35:33 UTC | 13:36:43 UTC | 70.0 s | m11-power |
+| cam06 | main | 2026-11-20 13:39:22 UTC | 13:40:28 UTC | 66.0 s | m11-power |
+| cam06 | main | 2026-11-20 13:43:28 UTC | 13:44:49 UTC | 81.0 s | m11-power |
+| cam06 | main | 2026-11-20 13:47:38 UTC | 13:48:51 UTC | 73.0 s | m11-power |
+| cam06 | main | 2026-11-20 13:51:31 UTC | 13:52:35 UTC | 64.0 s | m11-power |
+| cam06 | main | 2026-11-20 13:55:25 UTC | 13:56:34 UTC | 69.0 s | m11-power |
+| cam06 | main | 2026-11-20 13:59:23 UTC | 14:00:32 UTC | 69.0 s | m11-power |
+| cam06 | main | 2026-11-20 14:03:22 UTC | 14:04:33 UTC | 71.0 s | m11-power |
+| cam06 | main | 2026-11-20 14:13:03 UTC | 14:13:14 UTC | 11.0 s | m10-kill |
+| cam06 | main | 2026-11-20 14:14:24 UTC | 14:14:37 UTC | 13.0 s | m10-kill |
+| cam06 | main | 2026-11-20 14:15:47 UTC | 14:16:00 UTC | 13.0 s | m10-kill |
+| cam06 | main | 2026-11-20 14:17:09 UTC | 14:17:23 UTC | 14.0 s | m10-kill |
+| cam06 | main | 2026-11-20 14:18:32 UTC | 14:18:46 UTC | 14.0 s | m10-kill |
+| cam06 | main | 2026-11-20 14:19:55 UTC | 14:20:09 UTC | 14.0 s | m10-kill |
+| cam06 | main | 2026-11-20 14:21:18 UTC | 14:21:31 UTC | 13.0 s | m10-kill |
+| cam06 | main | 2026-11-20 14:22:41 UTC | 14:22:54 UTC | 13.0 s | m10-kill |
+| cam06 | main | 2026-11-20 14:24:04 UTC | 14:24:17 UTC | 13.0 s | m10-kill |
+| cam06 | main | 2026-11-20 14:25:26 UTC | 14:25:40 UTC | 14.0 s | m10-kill |
+| cam06 | main | 2026-11-20 14:33:30 UTC | 14:34:32 UTC | 62.0 s | m10-reboot |
+| cam06 | main | 2026-11-20 14:37:02 UTC | 14:38:08 UTC | 66.0 s | m10-reboot |
+| cam06 | main | 2026-11-20 14:41:07 UTC | 14:42:11 UTC | 64.0 s | m10-reboot |
+| cam06 | main | 2026-11-20 14:45:13 UTC | 14:46:16 UTC | 63.0 s | m10-reboot |
+| cam06 | main | 2026-11-20 14:49:08 UTC | 14:50:06 UTC | 58.0 s | m10-reboot |
+| cam06 | main | 2026-11-20 14:52:25 UTC | 14:53:26 UTC | 61.0 s | m10-reboot |
+| cam06 | main | 2026-11-20 14:56:16 UTC | 14:57:16 UTC | 59.0 s | m10-reboot |
+| cam06 | main | 2026-11-20 15:00:08 UTC | 15:01:07 UTC | 59.0 s | m10-reboot |
+| cam06 | main | 2026-11-20 15:04:05 UTC | 15:05:10 UTC | 64.0 s | m10-reboot |
+| cam06 | main | 2026-11-20 15:08:08 UTC | 15:09:13 UTC | 64.0 s | m10-reboot |
+| cam06 | main | 2026-11-20 15:26:32 UTC | 15:28:57 UTC | 145.0 s | m11-missing-disk |
+| cam06 | substream | 2026-11-20 13:22:01 UTC | 13:23:38 UTC | 97.0 s | m11-power |
+| cam06 | substream | 2026-11-20 13:32:01 UTC | 13:32:56 UTC | 55.0 s | m11-power |
+| cam06 | substream | 2026-11-20 13:35:01 UTC | 13:36:35 UTC | 94.0 s | m11-power |
+| cam06 | substream | 2026-11-20 13:39:00 UTC | 13:40:20 UTC | 80.0 s | m11-power |
+| cam06 | substream | 2026-11-20 13:43:02 UTC | 13:44:40 UTC | 98.0 s | m11-power |
+| cam06 | substream | 2026-11-20 13:47:03 UTC | 13:48:43 UTC | 100.0 s | m11-power |
+| cam06 | substream | 2026-11-20 13:51:02 UTC | 13:52:26 UTC | 84.0 s | m11-power |
+| cam06 | substream | 2026-11-20 13:55:03 UTC | 13:56:25 UTC | 82.0 s | m11-power |
+| cam06 | substream | 2026-11-20 13:59:02 UTC | 14:00:24 UTC | 82.0 s | m11-power |
+| cam06 | substream | 2026-11-20 14:03:00 UTC | 14:04:25 UTC | 85.0 s | m11-power |
+| cam06 | substream | 2026-11-20 14:33:35 UTC | 14:34:25 UTC | 50.0 s | m10-reboot |
+| cam06 | substream | 2026-11-20 14:37:13 UTC | 14:38:00 UTC | 47.0 s | m10-reboot |
+| cam06 | substream | 2026-11-20 14:41:17 UTC | 14:42:03 UTC | 46.0 s | m10-reboot |
+| cam06 | substream | 2026-11-20 14:45:21 UTC | 14:46:09 UTC | 48.0 s | m10-reboot |
+| cam06 | substream | 2026-11-20 14:49:09 UTC | 14:49:59 UTC | 50.0 s | m10-reboot |
+| cam06 | substream | 2026-11-20 14:52:31 UTC | 14:53:18 UTC | 47.0 s | m10-reboot |
+| cam06 | substream | 2026-11-20 14:56:19 UTC | 14:57:08 UTC | 49.0 s | m10-reboot |
+| cam06 | substream | 2026-11-20 15:00:13 UTC | 15:01:00 UTC | 47.0 s | m10-reboot |
+| cam06 | substream | 2026-11-20 15:04:15 UTC | 15:05:05 UTC | 50.0 s | m10-reboot |
+| cam06 | substream | 2026-11-20 15:08:18 UTC | 15:09:05 UTC | 47.0 s | m10-reboot |
+| cam06 | substream | 2026-11-20 15:26:39 UTC | 15:28:52 UTC | 133.0 s | m11-missing-disk |
+| cam07 | main | 2026-11-20 13:22:27 UTC | 13:23:56 UTC | 89.0 s | m11-power |
+| cam07 | main | 2026-11-20 13:31:55 UTC | 13:33:04 UTC | 69.0 s | m11-power |
+| cam07 | main | 2026-11-20 13:35:33 UTC | 13:36:43 UTC | 70.0 s | m11-power |
+| cam07 | main | 2026-11-20 13:39:22 UTC | 13:40:28 UTC | 66.0 s | m11-power |
+| cam07 | main | 2026-11-20 13:43:28 UTC | 13:44:49 UTC | 81.0 s | m11-power |
+| cam07 | main | 2026-11-20 13:47:38 UTC | 13:48:51 UTC | 73.0 s | m11-power |
+| cam07 | main | 2026-11-20 13:51:31 UTC | 13:52:35 UTC | 64.0 s | m11-power |
+| cam07 | main | 2026-11-20 13:55:25 UTC | 13:56:34 UTC | 69.0 s | m11-power |
+| cam07 | main | 2026-11-20 13:59:24 UTC | 14:00:33 UTC | 69.0 s | m11-power |
+| cam07 | main | 2026-11-20 14:03:22 UTC | 14:04:34 UTC | 72.0 s | m11-power |
+| cam07 | main | 2026-11-20 14:13:03 UTC | 14:13:14 UTC | 11.0 s | m10-kill |
+| cam07 | main | 2026-11-20 14:14:24 UTC | 14:14:37 UTC | 13.0 s | m10-kill |
+| cam07 | main | 2026-11-20 14:15:47 UTC | 14:16:00 UTC | 13.0 s | m10-kill |
+| cam07 | main | 2026-11-20 14:17:09 UTC | 14:17:23 UTC | 14.0 s | m10-kill |
+| cam07 | main | 2026-11-20 14:18:33 UTC | 14:18:46 UTC | 13.0 s | m10-kill |
+| cam07 | main | 2026-11-20 14:19:56 UTC | 14:20:09 UTC | 13.0 s | m10-kill |
+| cam07 | main | 2026-11-20 14:21:19 UTC | 14:21:31 UTC | 12.0 s | m10-kill |
+| cam07 | main | 2026-11-20 14:22:41 UTC | 14:22:54 UTC | 13.0 s | m10-kill |
+| cam07 | main | 2026-11-20 14:24:04 UTC | 14:24:17 UTC | 13.0 s | m10-kill |
+| cam07 | main | 2026-11-20 14:25:27 UTC | 14:25:40 UTC | 13.0 s | m10-kill |
+| cam07 | main | 2026-11-20 14:33:30 UTC | 14:34:32 UTC | 62.0 s | m10-reboot |
+| cam07 | main | 2026-11-20 14:37:02 UTC | 14:38:08 UTC | 66.0 s | m10-reboot |
+| cam07 | main | 2026-11-20 14:41:08 UTC | 14:42:11 UTC | 63.0 s | m10-reboot |
+| cam07 | main | 2026-11-20 14:45:14 UTC | 14:46:16 UTC | 62.0 s | m10-reboot |
+| cam07 | main | 2026-11-20 14:49:08 UTC | 14:50:06 UTC | 58.0 s | m10-reboot |
+| cam07 | main | 2026-11-20 14:52:24 UTC | 14:53:26 UTC | 61.0 s | m10-reboot |
+| cam07 | main | 2026-11-20 14:56:17 UTC | 14:57:16 UTC | 59.0 s | m10-reboot |
+| cam07 | main | 2026-11-20 15:00:08 UTC | 15:01:07 UTC | 59.0 s | m10-reboot |
+| cam07 | main | 2026-11-20 15:04:07 UTC | 15:05:10 UTC | 63.0 s | m10-reboot |
+| cam07 | main | 2026-11-20 15:08:09 UTC | 15:09:13 UTC | 64.0 s | m10-reboot |
+| cam07 | main | 2026-11-20 15:26:31 UTC | 15:28:57 UTC | 145.0 s | m11-missing-disk |
+| cam07 | substream | 2026-11-20 13:22:02 UTC | 13:23:38 UTC | 96.0 s | m11-power |
+| cam07 | substream | 2026-11-20 13:32:01 UTC | 13:32:56 UTC | 55.0 s | m11-power |
+| cam07 | substream | 2026-11-20 13:35:01 UTC | 13:36:35 UTC | 94.0 s | m11-power |
+| cam07 | substream | 2026-11-20 13:39:01 UTC | 13:40:20 UTC | 79.0 s | m11-power |
+| cam07 | substream | 2026-11-20 13:43:03 UTC | 13:44:40 UTC | 97.0 s | m11-power |
+| cam07 | substream | 2026-11-20 13:47:00 UTC | 13:48:43 UTC | 103.0 s | m11-power |
+| cam07 | substream | 2026-11-20 13:51:02 UTC | 13:52:26 UTC | 84.0 s | m11-power |
+| cam07 | substream | 2026-11-20 13:55:03 UTC | 13:56:25 UTC | 82.0 s | m11-power |
+| cam07 | substream | 2026-11-20 13:59:01 UTC | 14:00:24 UTC | 83.0 s | m11-power |
+| cam07 | substream | 2026-11-20 14:03:00 UTC | 14:04:25 UTC | 85.0 s | m11-power |
+| cam07 | substream | 2026-11-20 14:33:35 UTC | 14:34:25 UTC | 50.0 s | m10-reboot |
+| cam07 | substream | 2026-11-20 14:37:12 UTC | 14:38:01 UTC | 49.0 s | m10-reboot |
+| cam07 | substream | 2026-11-20 14:41:16 UTC | 14:42:04 UTC | 48.0 s | m10-reboot |
+| cam07 | substream | 2026-11-20 14:45:21 UTC | 14:46:09 UTC | 48.0 s | m10-reboot |
+| cam07 | substream | 2026-11-20 14:49:09 UTC | 14:49:58 UTC | 49.0 s | m10-reboot |
+| cam07 | substream | 2026-11-20 14:52:32 UTC | 14:53:21 UTC | 49.0 s | m10-reboot |
+| cam07 | substream | 2026-11-20 14:56:20 UTC | 14:57:08 UTC | 48.0 s | m10-reboot |
+| cam07 | substream | 2026-11-20 15:00:12 UTC | 15:01:00 UTC | 48.0 s | m10-reboot |
+| cam07 | substream | 2026-11-20 15:04:15 UTC | 15:05:02 UTC | 47.0 s | m10-reboot |
+| cam07 | substream | 2026-11-20 15:08:18 UTC | 15:09:05 UTC | 47.0 s | m10-reboot |
+| cam07 | substream | 2026-11-20 15:26:38 UTC | 15:28:52 UTC | 134.0 s | m11-missing-disk |
+| cam08 | main | 2026-11-20 13:22:24 UTC | 13:23:56 UTC | 92.0 s | m11-power |
+| cam08 | main | 2026-11-20 13:31:55 UTC | 13:33:04 UTC | 69.0 s | m11-power |
+| cam08 | main | 2026-11-20 13:35:33 UTC | 13:36:43 UTC | 70.0 s | m11-power |
+| cam08 | main | 2026-11-20 13:39:22 UTC | 13:40:28 UTC | 66.0 s | m11-power |
+| cam08 | main | 2026-11-20 13:43:28 UTC | 13:44:49 UTC | 81.0 s | m11-power |
+| cam08 | main | 2026-11-20 13:47:38 UTC | 13:48:51 UTC | 73.0 s | m11-power |
+| cam08 | main | 2026-11-20 13:51:31 UTC | 13:52:35 UTC | 64.0 s | m11-power |
+| cam08 | main | 2026-11-20 13:55:25 UTC | 13:56:34 UTC | 69.0 s | m11-power |
+| cam08 | main | 2026-11-20 13:59:23 UTC | 14:00:33 UTC | 70.0 s | m11-power |
+| cam08 | main | 2026-11-20 14:03:22 UTC | 14:04:34 UTC | 72.0 s | m11-power |
+| cam08 | main | 2026-11-20 14:13:03 UTC | 14:13:14 UTC | 11.0 s | m10-kill |
+| cam08 | main | 2026-11-20 14:14:24 UTC | 14:14:37 UTC | 13.0 s | m10-kill |
+| cam08 | main | 2026-11-20 14:15:47 UTC | 14:16:00 UTC | 13.0 s | m10-kill |
+| cam08 | main | 2026-11-20 14:17:09 UTC | 14:17:23 UTC | 14.0 s | m10-kill |
+| cam08 | main | 2026-11-20 14:18:33 UTC | 14:18:46 UTC | 13.0 s | m10-kill |
+| cam08 | main | 2026-11-20 14:19:56 UTC | 14:20:09 UTC | 13.0 s | m10-kill |
+| cam08 | main | 2026-11-20 14:21:19 UTC | 14:21:31 UTC | 12.0 s | m10-kill |
+| cam08 | main | 2026-11-20 14:22:41 UTC | 14:22:54 UTC | 13.0 s | m10-kill |
+| cam08 | main | 2026-11-20 14:24:04 UTC | 14:24:17 UTC | 13.0 s | m10-kill |
+| cam08 | main | 2026-11-20 14:25:27 UTC | 14:25:40 UTC | 13.0 s | m10-kill |
+| cam08 | main | 2026-11-20 14:33:30 UTC | 14:34:33 UTC | 63.0 s | m10-reboot |
+| cam08 | main | 2026-11-20 14:37:02 UTC | 14:38:08 UTC | 66.0 s | m10-reboot |
+| cam08 | main | 2026-11-20 14:41:08 UTC | 14:42:11 UTC | 63.0 s | m10-reboot |
+| cam08 | main | 2026-11-20 14:45:10 UTC | 14:46:16 UTC | 65.0 s | m10-reboot |
+| cam08 | main | 2026-11-20 14:49:08 UTC | 14:50:06 UTC | 58.0 s | m10-reboot |
+| cam08 | main | 2026-11-20 14:52:25 UTC | 14:53:26 UTC | 61.0 s | m10-reboot |
+| cam08 | main | 2026-11-20 14:56:18 UTC | 14:57:17 UTC | 59.0 s | m10-reboot |
+| cam08 | main | 2026-11-20 15:00:08 UTC | 15:01:07 UTC | 59.0 s | m10-reboot |
+| cam08 | main | 2026-11-20 15:04:06 UTC | 15:05:10 UTC | 63.0 s | m10-reboot |
+| cam08 | main | 2026-11-20 15:08:09 UTC | 15:09:13 UTC | 64.0 s | m10-reboot |
+| cam08 | main | 2026-11-20 15:26:32 UTC | 15:28:57 UTC | 145.0 s | m11-missing-disk |
+| cam08 | substream | 2026-11-20 13:22:01 UTC | 13:23:38 UTC | 97.0 s | m11-power |
+| cam08 | substream | 2026-11-20 13:32:01 UTC | 13:32:56 UTC | 55.0 s | m11-power |
+| cam08 | substream | 2026-11-20 13:35:01 UTC | 13:36:35 UTC | 94.0 s | m11-power |
+| cam08 | substream | 2026-11-20 13:39:00 UTC | 13:40:20 UTC | 80.0 s | m11-power |
+| cam08 | substream | 2026-11-20 13:43:02 UTC | 13:44:40 UTC | 98.0 s | m11-power |
+| cam08 | substream | 2026-11-20 13:47:03 UTC | 13:48:43 UTC | 100.0 s | m11-power |
+| cam08 | substream | 2026-11-20 13:51:02 UTC | 13:52:26 UTC | 84.0 s | m11-power |
+| cam08 | substream | 2026-11-20 13:55:02 UTC | 13:56:25 UTC | 83.0 s | m11-power |
+| cam08 | substream | 2026-11-20 13:59:02 UTC | 14:00:24 UTC | 82.0 s | m11-power |
+| cam08 | substream | 2026-11-20 14:03:00 UTC | 14:04:25 UTC | 85.0 s | m11-power |
+| cam08 | substream | 2026-11-20 14:33:35 UTC | 14:34:25 UTC | 50.0 s | m10-reboot |
+| cam08 | substream | 2026-11-20 14:37:12 UTC | 14:38:01 UTC | 49.0 s | m10-reboot |
+| cam08 | substream | 2026-11-20 14:41:17 UTC | 14:42:03 UTC | 46.0 s | m10-reboot |
+| cam08 | substream | 2026-11-20 14:45:22 UTC | 14:46:09 UTC | 47.0 s | m10-reboot |
+| cam08 | substream | 2026-11-20 14:49:09 UTC | 14:49:58 UTC | 49.0 s | m10-reboot |
+| cam08 | substream | 2026-11-20 14:52:31 UTC | 14:53:18 UTC | 47.0 s | m10-reboot |
+| cam08 | substream | 2026-11-20 14:56:20 UTC | 14:57:08 UTC | 48.0 s | m10-reboot |
+| cam08 | substream | 2026-11-20 15:00:12 UTC | 15:01:00 UTC | 48.0 s | m10-reboot |
+| cam08 | substream | 2026-11-20 15:04:15 UTC | 15:05:02 UTC | 47.0 s | m10-reboot |
+| cam08 | substream | 2026-11-20 15:08:18 UTC | 15:09:05 UTC | 47.0 s | m10-reboot |
+| cam08 | substream | 2026-11-20 15:26:39 UTC | 15:28:51 UTC | 132.0 s | m11-missing-disk |
+| cam09 | main | 2026-11-20 13:22:24 UTC | 13:23:56 UTC | 92.0 s | m11-power |
+| cam09 | main | 2026-11-20 13:31:55 UTC | 13:33:04 UTC | 69.0 s | m11-power |
+| cam09 | main | 2026-11-20 13:35:33 UTC | 13:36:43 UTC | 70.0 s | m11-power |
+| cam09 | main | 2026-11-20 13:39:22 UTC | 13:40:28 UTC | 66.0 s | m11-power |
+| cam09 | main | 2026-11-20 13:43:28 UTC | 13:44:49 UTC | 81.0 s | m11-power |
+| cam09 | main | 2026-11-20 13:47:38 UTC | 13:48:51 UTC | 73.0 s | m11-power |
+| cam09 | main | 2026-11-20 13:51:31 UTC | 13:52:35 UTC | 64.0 s | m11-power |
+| cam09 | main | 2026-11-20 13:55:25 UTC | 13:56:34 UTC | 69.0 s | m11-power |
+| cam09 | main | 2026-11-20 13:59:24 UTC | 14:00:33 UTC | 69.0 s | m11-power |
+| cam09 | main | 2026-11-20 14:03:22 UTC | 14:04:34 UTC | 72.0 s | m11-power |
+| cam09 | main | 2026-11-20 14:13:03 UTC | 14:13:14 UTC | 11.0 s | m10-kill |
+| cam09 | main | 2026-11-20 14:14:24 UTC | 14:14:37 UTC | 13.0 s | m10-kill |
+| cam09 | main | 2026-11-20 14:15:47 UTC | 14:16:00 UTC | 13.0 s | m10-kill |
+| cam09 | main | 2026-11-20 14:17:09 UTC | 14:17:23 UTC | 14.0 s | m10-kill |
+| cam09 | main | 2026-11-20 14:18:33 UTC | 14:18:46 UTC | 13.0 s | m10-kill |
+| cam09 | main | 2026-11-20 14:19:56 UTC | 14:20:09 UTC | 13.0 s | m10-kill |
+| cam09 | main | 2026-11-20 14:21:19 UTC | 14:21:32 UTC | 13.0 s | m10-kill |
+| cam09 | main | 2026-11-20 14:22:41 UTC | 14:22:54 UTC | 13.0 s | m10-kill |
+| cam09 | main | 2026-11-20 14:24:04 UTC | 14:24:17 UTC | 13.0 s | m10-kill |
+| cam09 | main | 2026-11-20 14:25:27 UTC | 14:25:40 UTC | 13.0 s | m10-kill |
+| cam09 | main | 2026-11-20 14:33:30 UTC | 14:34:33 UTC | 63.0 s | m10-reboot |
+| cam09 | main | 2026-11-20 14:37:02 UTC | 14:38:08 UTC | 66.0 s | m10-reboot |
+| cam09 | main | 2026-11-20 14:41:08 UTC | 14:42:11 UTC | 63.0 s | m10-reboot |
+| cam09 | main | 2026-11-20 14:45:12 UTC | 14:46:16 UTC | 63.4 s | m10-reboot |
+| cam09 | main | 2026-11-20 14:49:07 UTC | 14:50:06 UTC | 58.0 s | m10-reboot |
+| cam09 | main | 2026-11-20 14:52:25 UTC | 14:53:26 UTC | 61.0 s | m10-reboot |
+| cam09 | main | 2026-11-20 14:56:17 UTC | 14:57:17 UTC | 59.0 s | m10-reboot |
+| cam09 | main | 2026-11-20 15:00:08 UTC | 15:01:07 UTC | 59.0 s | m10-reboot |
+| cam09 | main | 2026-11-20 15:04:07 UTC | 15:05:10 UTC | 63.0 s | m10-reboot |
+| cam09 | main | 2026-11-20 15:08:08 UTC | 15:09:13 UTC | 64.0 s | m10-reboot |
+| cam09 | main | 2026-11-20 15:26:32 UTC | 15:28:57 UTC | 145.0 s | m11-missing-disk |
+| cam09 | substream | 2026-11-20 13:22:01 UTC | 13:23:38 UTC | 97.0 s | m11-power |
+| cam09 | substream | 2026-11-20 13:32:01 UTC | 13:32:56 UTC | 55.0 s | m11-power |
+| cam09 | substream | 2026-11-20 13:35:01 UTC | 13:36:35 UTC | 94.0 s | m11-power |
+| cam09 | substream | 2026-11-20 13:39:00 UTC | 13:40:20 UTC | 80.0 s | m11-power |
+| cam09 | substream | 2026-11-20 13:43:03 UTC | 13:44:40 UTC | 97.0 s | m11-power |
+| cam09 | substream | 2026-11-20 13:47:00 UTC | 13:48:43 UTC | 103.0 s | m11-power |
+| cam09 | substream | 2026-11-20 13:51:02 UTC | 13:52:26 UTC | 84.0 s | m11-power |
+| cam09 | substream | 2026-11-20 13:55:03 UTC | 13:56:25 UTC | 82.0 s | m11-power |
+| cam09 | substream | 2026-11-20 13:59:01 UTC | 14:00:24 UTC | 83.0 s | m11-power |
+| cam09 | substream | 2026-11-20 14:03:00 UTC | 14:04:25 UTC | 85.0 s | m11-power |
+| cam09 | substream | 2026-11-20 14:33:35 UTC | 14:34:25 UTC | 50.0 s | m10-reboot |
+| cam09 | substream | 2026-11-20 14:37:13 UTC | 14:38:01 UTC | 48.0 s | m10-reboot |
+| cam09 | substream | 2026-11-20 14:41:16 UTC | 14:42:04 UTC | 48.0 s | m10-reboot |
+| cam09 | substream | 2026-11-20 14:45:22 UTC | 14:46:09 UTC | 47.0 s | m10-reboot |
+| cam09 | substream | 2026-11-20 14:49:10 UTC | 14:49:58 UTC | 48.0 s | m10-reboot |
+| cam09 | substream | 2026-11-20 14:52:31 UTC | 14:53:21 UTC | 50.0 s | m10-reboot |
+| cam09 | substream | 2026-11-20 14:56:21 UTC | 14:57:08 UTC | 47.0 s | m10-reboot |
+| cam09 | substream | 2026-11-20 15:00:13 UTC | 15:01:00 UTC | 47.0 s | m10-reboot |
+| cam09 | substream | 2026-11-20 15:04:15 UTC | 15:05:02 UTC | 47.0 s | m10-reboot |
+| cam09 | substream | 2026-11-20 15:08:18 UTC | 15:09:05 UTC | 47.0 s | m10-reboot |
+| cam09 | substream | 2026-11-20 15:26:39 UTC | 15:28:52 UTC | 133.0 s | m11-missing-disk |
+| cam10 | main | 2026-11-20 13:22:29 UTC | 13:23:56 UTC | 87.0 s | m11-power |
+| cam10 | main | 2026-11-20 13:31:56 UTC | 13:33:04 UTC | 68.0 s | m11-power |
+| cam10 | main | 2026-11-20 13:35:34 UTC | 13:36:43 UTC | 69.0 s | m11-power |
+| cam10 | main | 2026-11-20 13:39:22 UTC | 13:40:28 UTC | 66.0 s | m11-power |
+| cam10 | main | 2026-11-20 13:43:28 UTC | 13:44:49 UTC | 81.0 s | m11-power |
+| cam10 | main | 2026-11-20 13:47:38 UTC | 13:48:52 UTC | 74.0 s | m11-power |
+| cam10 | main | 2026-11-20 13:51:31 UTC | 13:52:35 UTC | 64.0 s | m11-power |
+| cam10 | main | 2026-11-20 13:55:25 UTC | 13:56:34 UTC | 69.0 s | m11-power |
+| cam10 | main | 2026-11-20 13:59:24 UTC | 14:00:33 UTC | 69.0 s | m11-power |
+| cam10 | main | 2026-11-20 14:03:22 UTC | 14:04:34 UTC | 72.0 s | m11-power |
+| cam10 | main | 2026-11-20 14:13:03 UTC | 14:13:14 UTC | 11.0 s | m10-kill |
+| cam10 | main | 2026-11-20 14:14:24 UTC | 14:14:37 UTC | 13.0 s | m10-kill |
+| cam10 | main | 2026-11-20 14:15:47 UTC | 14:16:00 UTC | 13.0 s | m10-kill |
+| cam10 | main | 2026-11-20 14:17:10 UTC | 14:17:23 UTC | 13.0 s | m10-kill |
+| cam10 | main | 2026-11-20 14:18:33 UTC | 14:18:46 UTC | 13.0 s | m10-kill |
+| cam10 | main | 2026-11-20 14:19:56 UTC | 14:20:09 UTC | 13.0 s | m10-kill |
+| cam10 | main | 2026-11-20 14:21:19 UTC | 14:21:32 UTC | 13.0 s | m10-kill |
+| cam10 | main | 2026-11-20 14:22:41 UTC | 14:22:55 UTC | 14.0 s | m10-kill |
+| cam10 | main | 2026-11-20 14:24:04 UTC | 14:24:17 UTC | 13.0 s | m10-kill |
+| cam10 | main | 2026-11-20 14:25:27 UTC | 14:25:40 UTC | 13.0 s | m10-kill |
+| cam10 | main | 2026-11-20 14:33:30 UTC | 14:34:33 UTC | 63.0 s | m10-reboot |
+| cam10 | main | 2026-11-20 14:37:02 UTC | 14:38:08 UTC | 66.0 s | m10-reboot |
+| cam10 | main | 2026-11-20 14:41:08 UTC | 14:42:11 UTC | 63.0 s | m10-reboot |
+| cam10 | main | 2026-11-20 14:45:11 UTC | 14:46:17 UTC | 66.0 s | m10-reboot |
+| cam10 | main | 2026-11-20 14:49:08 UTC | 14:50:06 UTC | 58.0 s | m10-reboot |
+| cam10 | main | 2026-11-20 14:52:26 UTC | 14:53:26 UTC | 60.0 s | m10-reboot |
+| cam10 | main | 2026-11-20 14:56:17 UTC | 14:57:17 UTC | 59.0 s | m10-reboot |
+| cam10 | main | 2026-11-20 15:00:08 UTC | 15:01:07 UTC | 59.0 s | m10-reboot |
+| cam10 | main | 2026-11-20 15:04:07 UTC | 15:05:10 UTC | 63.0 s | m10-reboot |
+| cam10 | main | 2026-11-20 15:08:09 UTC | 15:09:13 UTC | 64.0 s | m10-reboot |
+| cam10 | main | 2026-11-20 15:26:32 UTC | 15:28:58 UTC | 145.0 s | m11-missing-disk |
+| cam10 | substream | 2026-11-20 13:22:00 UTC | 13:23:38 UTC | 98.0 s | m11-power |
+| cam10 | substream | 2026-11-20 13:32:00 UTC | 13:32:56 UTC | 56.0 s | m11-power |
+| cam10 | substream | 2026-11-20 13:35:01 UTC | 13:36:35 UTC | 94.0 s | m11-power |
+| cam10 | substream | 2026-11-20 13:39:00 UTC | 13:40:20 UTC | 80.0 s | m11-power |
+| cam10 | substream | 2026-11-20 13:43:03 UTC | 13:44:40 UTC | 97.0 s | m11-power |
+| cam10 | substream | 2026-11-20 13:47:00 UTC | 13:48:43 UTC | 103.0 s | m11-power |
+| cam10 | substream | 2026-11-20 13:51:02 UTC | 13:52:26 UTC | 84.0 s | m11-power |
+| cam10 | substream | 2026-11-20 13:55:03 UTC | 13:56:25 UTC | 82.0 s | m11-power |
+| cam10 | substream | 2026-11-20 13:59:01 UTC | 14:00:24 UTC | 83.0 s | m11-power |
+| cam10 | substream | 2026-11-20 14:03:00 UTC | 14:04:25 UTC | 85.0 s | m11-power |
+| cam10 | substream | 2026-11-20 14:33:35 UTC | 14:34:25 UTC | 50.0 s | m10-reboot |
+| cam10 | substream | 2026-11-20 14:37:13 UTC | 14:38:00 UTC | 47.0 s | m10-reboot |
+| cam10 | substream | 2026-11-20 14:41:17 UTC | 14:42:03 UTC | 46.0 s | m10-reboot |
+| cam10 | substream | 2026-11-20 14:45:21 UTC | 14:46:09 UTC | 48.0 s | m10-reboot |
+| cam10 | substream | 2026-11-20 14:49:09 UTC | 14:49:58 UTC | 49.0 s | m10-reboot |
+| cam10 | substream | 2026-11-20 14:52:31 UTC | 14:53:18 UTC | 47.0 s | m10-reboot |
+| cam10 | substream | 2026-11-20 14:56:20 UTC | 14:57:08 UTC | 48.0 s | m10-reboot |
+| cam10 | substream | 2026-11-20 15:00:12 UTC | 15:01:00 UTC | 48.0 s | m10-reboot |
+| cam10 | substream | 2026-11-20 15:04:15 UTC | 15:05:02 UTC | 47.0 s | m10-reboot |
+| cam10 | substream | 2026-11-20 15:08:18 UTC | 15:09:05 UTC | 47.0 s | m10-reboot |
+| cam10 | substream | 2026-11-20 15:26:39 UTC | 15:28:52 UTC | 133.0 s | m11-missing-disk |
+
+## Step windows (gateway clock)
+
+| Step | From (UTC) | To | Exit code |
+|---|---|---|---|
+| m10-disconnect | 2026-11-20 13:01:26 UTC | 13:15:09 UTC | 0 |
+| m11-power | 2026-11-20 13:20:25 UTC | 14:07:47 UTC | 1 |
+| m10-kill | 2026-11-20 14:13:03 UTC | 14:28:09 UTC | 0 |
+| m10-reboot | 2026-11-20 14:33:25 UTC | 15:12:31 UTC | 0 |
+| m11-full-disk | 2026-11-20 15:17:47 UTC | 15:21:19 UTC | 0 |
+| m11-missing-disk | 2026-11-20 15:26:35 UTC | 15:29:23 UTC | 0 |
+| m11-corrupt | 2026-11-20 15:34:40 UTC | 15:34:57 UTC | 0 |
+| m12-integrity | 2026-11-20 15:40:16 UTC | 15:44:57 UTC | 0 |
+
+Each step's own report (reports/ on the gateway) has its details and gap log. Step logs: reports/m26-<time>/ on the gateway.
+
+report: /private/tmp/claude-501/-Users-izzatullokhmakhammadjonov-Desktop/9b6c519b-07b5-4f83-ae2a-ca9f94fa7136/scratchpad/m4/recorder/reports/m26-matrix-20261120-154645.md
+EXIT=1

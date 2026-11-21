@@ -1,7 +1,7 @@
 # M26: fault simulation and handoff
 
 M26 has four parts: one test runner for the M10, M11 and M12 tests, deployment instructions for a
-blank gateway (docs/deploy.md), a check that the source is ready to hand over, and the
+blank gateway (docs/deploy.md, also the runbook), a check that the source is ready to hand over, and the
 known-limitations list (docs/known-limitations.md). The walkthrough call agenda is at the end.
 
 ## Test matrix

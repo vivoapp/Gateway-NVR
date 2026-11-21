@@ -7,7 +7,8 @@
   limit) in `recordings/substream/early-deletions.jsonl`, one line per camera and hour, and the health
   endpoint shows a tenth alert, `early_deletion` (warning, for 24 hours). `tests/m9_pressure.py` checks the
   list and `tests/m22_check.py` the alert (simulated). Segment format unchanged (docs/SEGMENT_FORMAT.md).
-- Milestone 4, built on a workstation and unit tested, not yet run on the reference gateway:
+- Milestone 4 (M25, M26), run on the reference gateway Nov 19 to 21; results in docs/milestone-4-results.md,
+  reports in docs/test-reports/milestone-4/:
   - M25: `tests/m25_load.py`, the load and resource acceptance run with everything in scope on (both
     streams, retention, health endpoint): 1 h at 4 and 8 cameras, then 24 h at 10; checks CPU, RAM
     (and its growth), temperature, disk headroom (including whether the agreed retention fits at the
@@ -19,6 +20,12 @@
     page and a test for every module, unit tests, everything committed), docs/deploy.md (blank
     machine to working gateway), docs/known-limitations.md, docs/m26-handoff.md (with the
     walkthrough agenda).
+  - M26: the matrix runs the two steps that need someone on site first.
+  - docs/deploy.md is also the runbook: more health alerts in "When something is wrong", and a new
+    "Recover" step (what recovers on its own after each fault, measured in M26; replacing the
+    recording disk or the whole gateway).
+  - Reports: the end of a time span shows its date when it falls on the next day (`vivo.utc_end`).
+  - The handoff check's unit tests split their fake keys and URL logins, so its own secret scan passes.
 - Milestone 3 (Resilience and monitoring: M10, M11, M12, M22), on the reference gateway since Nov 4;
   results in docs/milestone-3-results.md:
   - M22: health endpoint `tools/health.py` as the host service `vivo-health` (port 9101, `/health` JSON and

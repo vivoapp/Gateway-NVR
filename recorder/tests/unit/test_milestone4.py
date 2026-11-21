@@ -110,6 +110,11 @@ class M25Evaluate(unittest.TestCase):
         self.assertFalse(any("growth" in name for _, name, _ in rows))
         self.assertEqual(failed(rows), ["CPU temperature under 80 °C"])
 
+    def test_span_end_shows_its_date_after_midnight(self):
+        day = 1_795_046_400.0  # 2026-11-19 00:00:00 UTC
+        self.assertEqual(m25.vivo.utc_end(day + 8 * 3600, day + 9 * 3600), "09:00:00 UTC")
+        self.assertEqual(m25.vivo.utc_end(day + 8 * 3600, day + 32 * 3600 + 4), "2026-11-20 08:00:04 UTC")
+
     def test_mem_mb(self):
         self.assertAlmostEqual(m25.mem_mb("512MiB"), 512)
         self.assertAlmostEqual(m25.mem_mb("1.5GiB "), 1536)
@@ -181,15 +186,16 @@ class Handoff(unittest.TestCase):
         self.assertEqual(hc.secret_findings("f", text), [])
 
     def test_real_secrets_are_found(self):
-        text = ("VIVOCAM_PASSWORD=Hunter2xyz\n  password: s3cretvalue\nrtsp://admin:Hunter2xyz@10.0.0.5/x\n"
-                "-----BEGIN OPENSSH PRIVATE KEY-----\ntoken ghp_" + "a" * 36 + "\n")
+        # The samples are split into two literals, so the handoff check's own scan does not flag this file.
+        text = ("VIVOCAM_PASSWORD=Hunter2xyz\n  password: s3cretvalue\nrtsp://" "admin:Hunter2xyz@10.0.0.5/x\n"
+                "-----BEGIN OPENSSH " "PRIVATE KEY-----\ntoken ghp_" + "a" * 36 + "\n")
         found = hc.secret_findings("f", text)
         self.assertEqual(len(found), 5, found)
         self.assertFalse(any("Hunter2" in f or "s3cret" in f for f in found))   # never print the value
 
     def test_known_secret_values(self):
         secrets = {"VIVOCAM_PASSWORD": "p@ss:word99", "VIVOCAM_USER": "admin", "SHORT_PASSWORD": "abc"}
-        self.assertEqual(len(hc.known_secret_findings("f", "url rtsp://admin:p%40ss%3Aword99@x", secrets)), 1)
+        self.assertEqual(len(hc.known_secret_findings("f", "url rtsp://" "admin:p%40ss%3Aword99@x", secrets)), 1)
         self.assertEqual(hc.known_secret_findings("f", "admin abc", secrets), [])
         self.assertNotIn("p@ss", hc.known_secret_findings("f", "p@ss:word99", secrets)[0])
 

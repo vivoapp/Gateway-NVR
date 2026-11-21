@@ -404,7 +404,7 @@ def report_md(runs: list[dict], plan: str, device_note: str) -> tuple[str, bool]
     for r in runs:
         rep = testlib.Report()
         rep.rows = [(ok, name, detail) for ok, name, detail in r["checks"]]
-        md += ["", f"## {r['label']}: {r['cameras']} cameras, {vivo.utc(r['start'])} to {vivo.utc(r['end'])[11:]}", ""]
+        md += ["", f"## {r['label']}: {r['cameras']} cameras, {vivo.utc(r['start'])} to {vivo.utc_end(r['start'], r['end'])}", ""]
         md += rep.markdown()
         names = sorted(r["containers"])
         if names:
@@ -419,7 +419,7 @@ def report_md(runs: list[dict], plan: str, device_note: str) -> tuple[str, bool]
         seen = alert_intervals(r["polls"], pad=0)
         md += ["", "Health alerts seen during the run:", ""]
         md += (["| Alert | From (UTC) | To |", "|---|---|---|"] +
-               [f"| {k} | {vivo.utc(a)} | {vivo.utc(b)[11:]} |" for k, iv in sorted(seen.items()) for a, b in iv]
+               [f"| {k} | {vivo.utc(a)} | {vivo.utc_end(a, b)} |" for k, iv in sorted(seen.items()) for a, b in iv]
                if seen else ["None."])
         md += ["", "Gap log:", ""] + testlib.gap_table(r["gaps"])
     md += ["", "Raw samples: the .csv file with the same name. Limits: docs/acceptance-limits-proposal.md (M25)."]

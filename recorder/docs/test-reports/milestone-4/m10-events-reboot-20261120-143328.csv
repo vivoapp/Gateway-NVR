@@ -1,0 +1,11 @@
+kind,n,camera,t_event,t_restore,note
+reboot,1,all,1795185211.759,,"SSH down after 5 s, back after 48 s"
+reboot,2,all,1795185429.637,,"SSH down after 5 s, back after 47 s"
+reboot,3,all,1795185673.495,,"SSH down after 5 s, back after 46 s"
+reboot,4,all,1795185916.651,,"SSH down after 7 s, back after 47 s"
+reboot,5,all,1795186146.571,,"SSH down after 5 s, back after 48 s"
+reboot,6,all,1795186348.228,,"SSH down after 5 s, back after 47 s"
+reboot,7,all,1795186576.891,,"SSH down after 5 s, back after 48 s"
+reboot,8,all,1795186808.665,,"SSH down after 5 s, back after 47 s"
+reboot,9,all,1795187052.343,,"SSH down after 5 s, back after 46 s"
+reboot,10,all,1795187294.600,,"SSH down after 5 s, back after 46 s"

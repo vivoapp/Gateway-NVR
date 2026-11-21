@@ -152,6 +152,12 @@ def utc(t: float) -> str:
     return time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(t))
 
 
+def utc_end(start: float, end: float) -> str:
+    """The end of a "from start to end" span: the time alone on the same UTC day, with its date after midnight."""
+    full = utc(end)
+    return full[11:] if full[:10] == utc(start)[:10] else full
+
+
 def write_report(name: str, text: str) -> Path:
     REPORTS.mkdir(exist_ok=True)
     path = REPORTS / f"{name}-{time.strftime('%Y%m%d-%H%M%S', time.gmtime())}.md"
