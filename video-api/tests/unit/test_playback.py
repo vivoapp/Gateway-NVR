@@ -42,6 +42,18 @@ def test_playback_flow(env):
     assert env.audit()[-1]["event"] == "playback_start"
 
 
+def test_long_playlists_go_gzipped_when_the_client_accepts_it(env):
+    env.recorder.record("cam01", S, S + 1800)
+    long = "#EXTM3U\n" + "".join(f"#EXTINF:10.0,\nseg-{i}-v1.m4s\n" for i in range(1, 181)) + "#EXT-X-ENDLIST\n"
+    env.recorder.pieces = {"index.m3u8": long.encode()}
+    c = env.client()
+    b = c.post("/v1/cameras/cam01/playback", json=BODY, headers=env.auth(perms=("playback",))).json()
+    zipped = c.get(b["url"], headers={"Accept-Encoding": "gzip"})
+    assert zipped.headers.get("content-encoding") == "gzip" and zipped.text == long      # httpx unpacks it
+    plain = c.get(b["url"], headers={"Accept-Encoding": "identity"})
+    assert "content-encoding" not in plain.headers and plain.text == long
+
+
 def test_playback_errors(env):
     c, h = env.client(), env.auth(perms=("playback",))
     r = c.post("/v1/cameras/cam01/playback", json=BODY, headers=h)

@@ -127,7 +127,10 @@ def test_playback_playlist_and_pieces(rig):
 
 def test_clip(rig, tmp_path):
     c, cam = rig["client"], rig["cam"]
-    body = {"start": fmt(rig["start"] + 10), "end": fmt(rig["start"] + 70)}
+    # the mock's ten minutes: 7 minutes in, after the hole, so a clip that kept its pieces' times would
+    # read 480 s long; Frigate's stretch is 150 s, so its clip starts 10 s in
+    at = rig["start"] + (420 if rig["end"] - rig["start"] >= 600 else 10)
+    body = {"start": fmt(at), "end": fmt(at + 60)}
     r = c.post(f"/v1/cameras/{cam}/clips", json=body, headers=rig["h"])
     assert r.status_code == 202, r.text
     cid = r.json()["clip_id"]

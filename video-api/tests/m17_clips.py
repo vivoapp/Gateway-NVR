@@ -9,12 +9,17 @@
 Writes reports/m17-clips-<label>-<UTC>.md.
 
 usage: tests/m17_clips.py --key KEYS/test-1.private.pem --aud vivo-gw:lab [--api https://127.0.0.1:8443]
-                          [--camera cam01] [--keep 60] [--label lab]
+                          [--camera cam01] [--keep 60] [--label lab] [--check-on vivo-n150]
+
+--check-on HOST: on a gateway, the clip is downloaded and checked on the gateway itself over SSH, so no
+footage leaves it (the scope's rule). Only the results come back. It needs passwordless sudo there,
+and decodes the clip with the ffmpeg in the Frigate image already on the gateway.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import shlex
 import shutil
 import subprocess
 import sys
@@ -54,6 +59,41 @@ def wait(c, h, cid: str, timeout: float = 120) -> tuple[dict, float]:
     return b, time.monotonic() - t0
 
 
+REMOTE_CHECK = r"""
+set -eu
+d="$(mktemp -d /tmp/vivo-m17-XXXXXX)"; trap 'rm -rf "$d"' EXIT
+umask 077; cat > "$d/header"
+code="$(curl -sk -o "$d/clip.mp4" -w '%{http_code}' -H @"$d/header" "https://127.0.0.1:8443/v1/clips/$1/download")"
+size="$(stat -c %s "$d/clip.mp4" 2>/dev/null || echo 0)"
+box="$(python3 -c 'import sys; sys.path.insert(0, "/opt/vivo-gateway/tools"); import pathlib, mp4box; print(mp4box.cut_short(pathlib.Path(sys.argv[1])) or "ok")' "$d/clip.mp4" 2>&1 | tail -1)"
+image="$(docker inspect frigate --format '{{.Config.Image}}')"
+probe='p="$(command -v ffprobe || ls /usr/lib/ffmpeg/*/bin/ffprobe | sort -V | tail -1)"; f="$(dirname "$p")/ffmpeg";
+  "$p" -v error -show_entries format=duration:stream=codec_name -of compact=p=0:nk=1 /x/clip.mp4 | tr "\n" " "; echo;
+  "$f" -v error -i /x/clip.mp4 -f null - 2>&1 | wc -l'
+out="$(docker run --rm --network none --cpus 2 -v "$d:/x:ro" --entrypoint sh "$image" -c "$probe" 2>&1 || true)"
+printf 'http=%s\nsize=%s\nbox=%s\nprobe=%s\nerrors=%s\n' "$code" "$size" "$box" "$(echo "$out" | head -1)" "$(echo "$out" | tail -1)"
+"""
+
+
+def check_on_gateway(host: str, cid: str, auth: str) -> dict:
+    """Download clip cid on the gateway and check it there; the grant goes over stdin, never on a command line."""
+    cmd = f"sudo -n bash -c {shlex.quote(REMOTE_CHECK)} m17 {shlex.quote(cid)}"
+    try:
+        out = subprocess.run(["ssh", "-o", "BatchMode=yes", host, cmd], input=f"Authorization: {auth}\n",
+                             capture_output=True, text=True, timeout=600)
+    except subprocess.TimeoutExpired:
+        return {"error": "the check on the gateway took over 10 minutes"}
+    kv = dict(line.split("=", 1) for line in out.stdout.splitlines() if "=" in line)
+    if out.returncode != 0 or "http" not in kv:
+        return {"error": (out.stderr.strip().splitlines() or ["ssh failed"])[-1][:160]}
+    parts = kv.get("probe", "").split()
+    codecs = ",".join(p for p in parts if not p.replace(".", "", 1).isdigit())
+    duration = next((p for p in parts if p.replace(".", "", 1).isdigit()), "0")
+    errors = kv.get("errors", "").strip()
+    return {"http": kv["http"].strip(), "size": int(kv.get("size", "0") or 0), "box": kv.get("box", "").strip(),
+            "duration": duration, "codecs": codecs or "?", "decode_errors": int(errors) if errors.isdigit() else -1}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--api", default="https://127.0.0.1:8443")
@@ -62,6 +102,7 @@ def main() -> int:
     ap.add_argument("--camera", default="cam01")
     ap.add_argument("--keep", type=int, help="the API's CLIP_KEEP; checks that the clip is deleted after it")
     ap.add_argument("--label", default="lab")
+    ap.add_argument("--check-on", help="SSH host: download and check the clip there, not here")
     a = ap.parse_args()
     key, kid, cam = grant_issuer.load_key(a.key), grant_issuer.kid_of(a.key), a.camera
     h = lambda: {"Authorization": "Bearer " + grant_issuer.sign(key, kid, a.aud, [cam], ["export", "playback"], ttl=60)}  # noqa: E731
@@ -83,21 +124,30 @@ def main() -> int:
     took = time.monotonic() - t0
     rep.check("5-minute clip ready within 30 s", b.get("status") == "ready" and took <= 30,
               f"{b.get('status')} after {took:.1f} s, {b.get('size_bytes') or 0:,} bytes")
-    with tempfile.TemporaryDirectory() as tmp:
-        out = Path(tmp) / "clip.mp4"
-        d = c.get(f"/v1/clips/{cid}/download", headers=h())
-        out.write_bytes(d.content)
-        bad = mp4.problem(out)
-        rep.check("download is a whole MP4", d.status_code == 200 and bad is None and len(d.content) == b.get("size_bytes"),
-                  bad or f"{len(d.content):,} bytes, {d.headers.get('content-disposition', '')}")
-        if shutil.which("ffprobe"):
-            info = json.loads(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_name",
-                                              "-of", "json", str(out)], capture_output=True, text=True).stdout or "{}")
-            dur = float(info.get("format", {}).get("duration", 0))
-            codecs = ",".join(x.get("codec_name", "?") for x in info.get("streams", []))
-            dec = subprocess.run(["ffmpeg", "-v", "error", "-i", str(out), "-f", "null", "-"], capture_output=True, text=True)
-            rep.check("clip plays for the asked 5 minutes, every frame decodes", 290 <= dur <= 310 and not dec.stderr.strip(),
-                      f"{dur:.1f} s, {codecs}, {len(dec.stderr.strip().splitlines())} decode errors")
+    if a.check_on:
+        res = check_on_gateway(a.check_on, cid, h()["Authorization"])
+        rep.check("download is a whole MP4", res.get("http") == "200" and res.get("box") == "ok"
+                  and res.get("size") == b.get("size_bytes"),
+                  res.get("error") or f"{res.get('size', 0):,} bytes, checked on {a.check_on}, box check {res.get('box')}")
+        dur, errors = float(res.get("duration") or 0), int(res.get("decode_errors", -1))
+        rep.check("clip plays for the asked 5 minutes, every frame decodes", 290 <= dur <= 315 and errors == 0,
+                  f"{dur:.1f} s, {res.get('codecs', '?')}, {errors} decode errors (on {a.check_on}; the clip never left it)")
+    else:
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "clip.mp4"
+            d = c.get(f"/v1/clips/{cid}/download", headers=h())
+            out.write_bytes(d.content)
+            bad = mp4.problem(out)
+            rep.check("download is a whole MP4", d.status_code == 200 and bad is None and len(d.content) == b.get("size_bytes"),
+                      bad or f"{len(d.content):,} bytes, {d.headers.get('content-disposition', '')}")
+            if shutil.which("ffprobe"):
+                info = json.loads(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_name",
+                                                  "-of", "json", str(out)], capture_output=True, text=True).stdout or "{}")
+                dur = float(info.get("format", {}).get("duration", 0))
+                codecs = ",".join(x.get("codec_name", "?") for x in info.get("streams", []))
+                dec = subprocess.run(["ffmpeg", "-v", "error", "-i", str(out), "-f", "null", "-"], capture_output=True, text=True)
+                rep.check("clip plays for the asked 5 minutes, every frame decodes", 290 <= dur <= 310 and not dec.stderr.strip(),
+                          f"{dur:.1f} s, {codecs}, {len(dec.stderr.strip().splitlines())} decode errors")
 
     long = {"start": utc(s), "end": utc(s + 1801)}
     r = c.post(f"/v1/cameras/{cam}/clips", json=long, headers=h())

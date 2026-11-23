@@ -24,3 +24,16 @@
   settings and adds the ones it lacks from `video-api.env.example`. Before, a file left with only a
   comment (the reference gateway's, emptied on Oct 27) kept the API on its built-in defaults,
   including the gateway id `vivo-gw` instead of the host name.
+- Gateway test fixes (Nov 22, 2026, found on the reference gateway with real recordings):
+  - Playback over more than about 3 hours failed with `upstream_unavailable`: Frigate's video module
+    refuses one playlist of more than about 1,100 pieces. The Frigate adapter now asks for one part
+    per clock hour (UTC), 6 at a time, and joins them into one playlist (a discontinuity between
+    parts, piece names prefixed `c<k>-`). Finished hours are kept for an hour. On the gateway, the
+    first picture of a 24-hour playback now takes 0.94 s (median of 5).
+  - Playlists over 1 KB go out gzipped when the player accepts it (a 24-hour playlist is 8,640
+    pieces).
+  - The mock recorder's clips kept the stored pieces' absolute timestamps, so a 5-minute clip read
+    as about 30 minutes long. Clips now start at 0, without the per-piece `styp` and `sidx` boxes.
+  - Test tools: `tests/m16_probe.py` measures first picture and seeks on the gateway itself;
+    `tests/m17_clips.py --check-on HOST` checks the clip on the gateway, so footage stays there;
+    `tests/m14_check.py --audit-fetch` reads the audit log over SSH.

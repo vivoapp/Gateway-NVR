@@ -8,7 +8,8 @@ store them:
     <mock_dir>/<camera>/meta.json           {"segment_seconds": 10}
 
 tools/make_mock.py makes such a folder with ffmpeg (test pictures, with gaps where asked).
-Playback is an HLS playlist of the pieces; a clip is the header plus the pieces (a fragmented MP4).
+Playback is an HLS playlist of the pieces. A clip is the header plus the pieces (a fragmented MP4),
+with their decode times moved so the clip starts at 0 and without each piece's styp and sidx boxes.
 """
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ import json
 import re
 from pathlib import Path
 
+from .. import mp4
 from .base import ClipSource, Media, NotRecorded, RecorderUnavailable, Segment, content_type
 
 CHUNK = 256 * 1024
@@ -118,6 +120,21 @@ class MockRecorder:
         pieces = self._pieces(camera, start, end)
         if not pieces:
             raise NotRecorded("clip")
-        d = self._cam(camera)
-        paths = [d / "init.mp4"] + [p for _, p, _ in pieces]
-        return ClipSource(_read(paths), sum(p.stat().st_size for p in paths))
+        init = self._cam(camera) / "init.mp4"
+        paths = [p for _, p, _ in pieces]
+        try:
+            shift = mp4.decode_times(paths[0].read_bytes())
+            size = init.stat().st_size + sum(mp4.kept_size(p) for p in paths)
+        except (OSError, ValueError) as exc:
+            raise RecorderUnavailable(f"cannot read the pieces: {exc}") from None
+
+        async def body():
+            async for chunk in _read([init]):
+                yield chunk
+            for p in paths:
+                try:
+                    piece = p.read_bytes()
+                except OSError:
+                    raise RecorderUnavailable(f"cannot read {p.name}") from None
+                yield mp4.rebase_fragment(piece, shift)
+        return ClipSource(body(), size)

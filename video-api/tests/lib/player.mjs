@@ -27,7 +27,10 @@ export async function openPlayer(params) {
   const port = 9600 + Math.floor(Math.random() * 300);
   const profile = mkdtempSync(join(tmpdir(), "vivo-chrome-"));
   const chrome = spawn(CHROME, ["--headless=new", `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`,
-    "--ignore-certificate-errors", "--autoplay-policy=no-user-gesture-required", "--no-first-run", "about:blank"],
+    "--ignore-certificate-errors", "--autoplay-policy=no-user-gesture-required", "--no-first-run",
+    // VIVO_TEST_NO_CORS=1: against a gateway whose CORS_ORIGINS is empty (no browser origin allowed), this
+    // throwaway test browser skips the CORS check instead of the gateway being opened to the test page.
+    ...(process.env.VIVO_TEST_NO_CORS === "1" ? ["--disable-web-security"] : []), "about:blank"],
   { stdio: "ignore" });
   let wsUrl;
   for (let i = 0; i < 100 && !wsUrl; i++) {
@@ -46,6 +49,8 @@ export async function openPlayer(params) {
   const close = async () => {
     await send("Browser.close").catch(() => {});
     chrome.kill(); server.close();
+    // wait for Chrome to exit, or it writes into the profile again after it is removed
+    if (chrome.exitCode === null) await new Promise((r) => { chrome.once("exit", r); setTimeout(r, 5000); });
     try { rmSync(profile, { recursive: true, force: true }); } catch {}
   };
   return { ev, close };

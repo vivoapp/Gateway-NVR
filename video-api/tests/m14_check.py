@@ -8,6 +8,10 @@ reports/m14-check-<UTC>.md.
 
 usage: tests/m14_check.py --key KEYS/test-1.private.pem --aud vivo-gw:lab [--api https://127.0.0.1:8443]
                           [--camera cam01] [--audit-dir lab/data/audit] [--label lab]
+
+On a gateway the audit log is on the gateway: --audit-fetch runs a shell command that copies it
+into --audit-dir just before the audit checks, for example
+  --audit-dir /tmp/audit --audit-fetch "ssh vivo-n150 sudo -n tar -C /srv/vivo/video-api/audit -c . | tar -x -C /tmp/audit"
 """
 from __future__ import annotations
 
@@ -16,6 +20,7 @@ import base64
 import hashlib
 import hmac
 import json
+import subprocess
 import sys
 import tempfile
 import time
@@ -60,6 +65,7 @@ def main() -> int:
     ap.add_argument("--aud", required=True)
     ap.add_argument("--camera", default="cam01")
     ap.add_argument("--audit-dir", type=Path)
+    ap.add_argument("--audit-fetch", help="shell command that copies the audit log into --audit-dir first")
     ap.add_argument("--label", default="lab")
     a = ap.parse_args()
 
@@ -145,6 +151,9 @@ def main() -> int:
     # ---- audit log
     if a.audit_dir:
         time.sleep(0.5)
+        if a.audit_fetch:
+            a.audit_dir.mkdir(parents=True, exist_ok=True)
+            subprocess.run(a.audit_fetch, shell=True, check=True)
         lines = []
         for p in sorted(a.audit_dir.glob("*.jsonl")):
             lines += [json.loads(x) for x in p.read_text().splitlines() if x.strip()]
