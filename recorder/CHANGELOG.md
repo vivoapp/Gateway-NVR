@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Docker pin: `docker-ce-rootless-extras` is now installed by name at `DOCKER_CE_VERSION` and held, with
+  `uidmap`, `dbus-user-session` and `acl` (the cloud uploader's rootless Docker needs them; asked by Haris
+  on Nov 23 2026). It had come in as a dependency at a newer version and was not held. `tests/m1_check.sh`
+  checks its version and hold. On the reference gateway it was downgraded from 5:29.9.2 and held on Nov 23.
 - Early-deletion notice (M9), as offered to Haris on Oct 29, on the reference gateway since Nov 3:
   the `storage` service lists substream segments deleted before `substream_days` ended (disk above the safe
   limit) in `recordings/substream/early-deletions.jsonl`, one line per camera and hour, and the health

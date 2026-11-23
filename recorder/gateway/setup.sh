@@ -185,11 +185,14 @@ step_docker() {
 deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable
 EOF
   run apt-get update -q
-  run sh -c 'apt-mark unhold docker-ce docker-ce-cli containerd.io docker-compose-plugin >/dev/null 2>&1 || true'
+  run sh -c 'apt-mark unhold docker-ce docker-ce-cli containerd.io docker-compose-plugin docker-ce-rootless-extras >/dev/null 2>&1 || true'
   run env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --allow-downgrades \
     "docker-ce=$DOCKER_CE_VERSION" "docker-ce-cli=$DOCKER_CE_VERSION" \
-    "containerd.io=$CONTAINERD_VERSION" "docker-compose-plugin=$COMPOSE_PLUGIN_VERSION"
-  run apt-mark hold docker-ce docker-ce-cli containerd.io docker-compose-plugin
+    "containerd.io=$CONTAINERD_VERSION" "docker-compose-plugin=$COMPOSE_PLUGIN_VERSION" \
+    "docker-ce-rootless-extras=$DOCKER_CE_VERSION" uidmap dbus-user-session acl
+  # docker-ce-rootless-extras, uidmap, dbus-user-session and acl: the cloud uploader's rootless Docker
+  # (cloud/, M19 and M20) needs them. The extras follow docker-ce's version; the other three are Ubuntu's.
+  run apt-mark hold docker-ce docker-ce-cli containerd.io docker-compose-plugin docker-ce-rootless-extras
   put_file /etc/docker/daemon.json 644 < "$REPO/gateway/files/daemon.json"
 
   # Start Docker after the recording disk is mounted (but still start without it,

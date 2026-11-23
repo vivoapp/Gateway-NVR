@@ -12,7 +12,7 @@ kernel_ok() {
   local newest; newest="$(find /boot -maxdepth 1 -name 'vmlinuz-*' -printf '%f\n' | sed 's/^vmlinuz-//' | sort -V | tail -1)"
   echo "$KERNEL_PACKAGE installed, running $(uname -r), newest $newest"; [[ "$(uname -r)" == "$newest" ]]
 }
-held() { local h; h="$(apt-mark showhold)"; for p in docker-ce docker-ce-cli containerd.io docker-compose-plugin; do grep -qx "$p" <<<"$h" || { echo "$p not held"; return 1; }; done; echo "all held"; }
+held() { local h; h="$(apt-mark showhold)"; for p in docker-ce docker-ce-cli containerd.io docker-compose-plugin docker-ce-rootless-extras; do grep -qx "$p" <<<"$h" || { echo "$p not held"; return 1; }; done; echo "all held"; }
 unit_ok() { systemctl is-enabled "$1" >/dev/null && systemctl is-active "$1" >/dev/null && echo "$1 enabled and active"; }
 mount_ok() {
   mountpoint -q "$MEDIA_ROOT" || { echo "$MEDIA_ROOT not mounted"; return 1; }
@@ -70,6 +70,7 @@ images_pinned() {
 check "OS is Ubuntu $UBUNTU_VERSION_ID x86_64"          os_ok
 check "HWE kernel installed and running"                 kernel_ok
 check "docker-ce pinned"                                 pkg_is docker-ce "$DOCKER_CE_VERSION"
+check "docker rootless extras pinned"                    pkg_is docker-ce-rootless-extras "$DOCKER_CE_VERSION"
 check "containerd pinned"                                pkg_is containerd.io "$CONTAINERD_VERSION"
 check "compose plugin pinned"                            pkg_is docker-compose-plugin "$COMPOSE_PLUGIN_VERSION"
 check "Docker packages held"                             held
