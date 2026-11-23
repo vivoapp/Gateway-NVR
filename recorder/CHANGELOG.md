@@ -6,6 +6,10 @@
   `uidmap`, `dbus-user-session` and `acl` (the cloud uploader's rootless Docker needs them; asked by Haris
   on Nov 23 2026). It had come in as a dependency at a newer version and was not held. `tests/m1_check.sh`
   checks its version and hold. On the reference gateway it was downgraded from 5:29.9.2 and held on Nov 23.
+- Mender images (M27): `gateway/setup.sh` keeps an existing `LABEL=` entry for the recording disk
+  (Mohamed's image mounts `/srv/vivo` by `LABEL=vivo-media`, because every disk has its own UUID)
+  instead of stopping with "no fstab entry". The mount options stay the same. It stops if two
+  attached disks carry that label. `tests/unit/test_setup_fstab.py`; `tests/m1_check.sh` accepts either.
 - Early-deletion notice (M9), as offered to Haris on Oct 29, on the reference gateway since Nov 3:
   the `storage` service lists substream segments deleted before `substream_days` ended (disk above the safe
   limit) in `recordings/substream/early-deletions.jsonl`, one line per camera and hour, and the health

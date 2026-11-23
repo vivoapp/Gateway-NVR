@@ -12,7 +12,8 @@
 #   kernel     Ubuntu HWE kernel (N150 graphics need it); the first run asks for one reboot
 #   time       UTC system clock, chrony NTP (also serves time to the cameras on LAN_CIDRS)
 #   docker     Docker Engine + Compose at the versions pinned in versions.env
-#   disk       recording disk at MEDIA_ROOT (ext4, by UUID, nofail, short write cache); --create-lv SIZE
+#   disk       recording disk at MEDIA_ROOT (ext4, by UUID or an existing LABEL= entry, nofail, short
+#              write cache); --create-lv SIZE
 #              makes it a new LVM volume next to the OS instead (no separate disk); --add-disk
 #              /dev/XXX ERASES that disk and grows the LVM recording volume onto it
 #   ssh        SSH by key only, password login off
@@ -55,6 +56,16 @@ put_file() { # <path> <mode> ; content on stdin
   printf '    write %s (mode %s)\n' "$path" "$mode"
   if (( DRY_RUN )); then sed 's/^/      | /' "$tmp"; rm -f "$tmp"; return 0; fi
   install -D -m "$mode" "$tmp" "$path"; rm -f "$tmp"
+}
+# The source field of the fstab entry for a mount point, if it is by UUID= or LABEL=; empty if none.
+# setup.sh writes UUID= itself; Mender images carry LABEL=vivo-media, because one image serves
+# gateways whose disks all have different UUIDs.
+media_fstab_source() { # <fstab file> <mount point>
+  awk -v m="$2" '$1 !~ /^#/ && $2 == m && $1 ~ /^(UUID|LABEL)=./ {src = $1} END {print src}' "$1"
+}
+# How many attached disks match a LABEL=... (blkid exits 2 when none does; that is a count of 0).
+label_disk_count() { # <LABEL=name>
+  { blkid -t "$1" -o device 2>/dev/null || true; } | wc -l | tr -d ' '
 }
 
 while (( $# )); do
@@ -239,14 +250,21 @@ step_disk() {
     run mkfs.ext4 -F -L vivo-media -m 0 "$FORMAT_DISK"
   fi
 
-  local uuid line
+  local src line
   if [[ -n "$FORMAT_DISK" ]]; then
-    uuid="$( (( DRY_RUN )) && echo DRYRUN-UUID || blkid -s UUID -o value "$FORMAT_DISK")"
+    src="UUID=$( (( DRY_RUN )) && echo DRYRUN-UUID || blkid -s UUID -o value "$FORMAT_DISK")"
   else
-    uuid="$(awk -v m="$MEDIA_ROOT" '$2==m && $1 ~ /^UUID=/ {sub("UUID=","",$1); print $1}' /etc/fstab)"
-    [[ -n "$uuid" ]] || die "no fstab entry for $MEDIA_ROOT; run with --format-disk /dev/XXX (or add one by UUID)"
+    src="$(media_fstab_source /etc/fstab "$MEDIA_ROOT")"
+    [[ -n "$src" ]] || die "no fstab entry for $MEDIA_ROOT; run with --format-disk /dev/XXX (or add one by UUID= or LABEL=)"
+    if [[ "$src" == LABEL=* ]]; then
+      # A label must name one disk. Every disk this script formats is labelled vivo-media, so an
+      # old recording disk plugged in next to the new one would let the mount pick either.
+      local n; n="$(label_disk_count "$src")"
+      (( n <= 1 )) || die "$n disks have $src; unplug or relabel the extra one(s) first"
+    fi
   fi
-  line="UUID=$uuid $MEDIA_ROOT ext4 defaults,noatime,commit=2,nofail,x-systemd.device-timeout=15s 0 2"
+  # The options stay the same with UUID= or LABEL= (Mender images use this exact line).
+  line="$src $MEDIA_ROOT ext4 defaults,noatime,commit=2,nofail,x-systemd.device-timeout=15s 0 2"
   if ! grep -qxF "$line" /etc/fstab; then
     # Replace any older entry for MEDIA_ROOT (e.g. a replaced or re-formatted disk), then add ours.
     printf '    fstab: %s\n' "$line"
@@ -257,7 +275,7 @@ step_disk() {
       mv /etc/fstab.vivo-new /etc/fstab
     fi
   fi
-  ok "fstab entry uses UUID=$uuid with nofail"
+  ok "fstab entry uses $src with nofail"
 
   # The mount point itself is made immutable while nothing is mounted on it, so if
   # the disk is ever missing, nothing (Frigate included) can write to the OS disk.

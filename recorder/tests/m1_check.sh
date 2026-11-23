@@ -17,8 +17,8 @@ unit_ok() { systemctl is-enabled "$1" >/dev/null && systemctl is-active "$1" >/d
 mount_ok() {
   mountpoint -q "$MEDIA_ROOT" || { echo "$MEDIA_ROOT not mounted"; return 1; }
   local line; line="$(awk -v m="$MEDIA_ROOT" '$2==m' /etc/fstab)"
-  [[ "$line" == UUID=* && "$line" == *nofail* ]] || { echo "fstab: $line"; return 1; }
-  echo "$(findmnt -no SOURCE,FSTYPE,SIZE "$MEDIA_ROOT"), fstab by UUID with nofail"
+  [[ ( "$line" == UUID=* || "$line" == LABEL=* ) && "$line" == *nofail* ]] || { echo "fstab: $line"; return 1; }
+  echo "$(findmnt -no SOURCE,FSTYPE,SIZE "$MEDIA_ROOT"), fstab by ${line%%=*} with nofail"
 }
 mountpoint_immutable() {
   # Look under the mount: the bare mount point on the OS disk must be immutable.
