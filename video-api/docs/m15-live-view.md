@@ -35,7 +35,7 @@
 - `tests/m15_capture.sh` with `tests/pcap_summary.py`: packet headers on the gateway during the remote
   test, and which path the video took (direct or through TURN).
 
-## Remote test (after funding, with Vivo's server)
+## Remote test (with Vivo's server)
 
 1. Vivo provides a small Linux server with a public IP; coturn and the test tunnel are set up on it
    following [turn-runbook.md](turn-runbook.md).
