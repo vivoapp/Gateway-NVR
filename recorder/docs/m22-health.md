@@ -22,7 +22,7 @@ when an alert is active).
 
 | Part | Fields |
 |---|---|
-| `cameras.<id>` | `online`, `main_silent_s` (seconds since the main stream last delivered data), `fps` (Frigate), `main_segment_age_s`, `substream_segment_age_s` (age of the newest recorded segment) |
+| `cameras.<id>` | `online` (`null`, unknown, while go2rtc's stream list does not answer, for up to 30 s), `main_silent_s` (seconds since the main stream last delivered data), `fps` (Frigate), `main_segment_age_s`, `substream_segment_age_s` (age of the newest recorded segment) |
 | `recorder` | `frigate_up`, `recording_on` per camera, `recording_on_all` |
 | `disk` | `path`, `mounted`, `percent_used`, `limit_percent`, `points_below_limit`, `free_bytes`, `fs_errors` (ext4 error count), `ssd` (SMART per disk: health, temperature, power-on hours, wear, media errors, reallocated and pending sectors, `warnings`), `early_deletions` (lines of `early-deletions.jsonl` from the last 24 hours, docs/m9-retention.md) |
 | `containers.<name>` | `state`, `restarts` (Docker's count), `started` for go2rtc, frigate, substream, storage |
@@ -36,7 +36,7 @@ SMART is read every 10 minutes (it is slow and changes slowly); everything else 
 
 | Alert | Target | Triggers when | Level |
 |---|---|---|---|
-| `camera_offline` | camera | its main stream delivered no data for 30 s | critical |
+| `camera_offline` | camera | its main stream delivered no data for 30 s (not raised while go2rtc's stream list does not answer, until that has lasted 30 s) | critical |
 | `recording_gap` | camera/main, camera/substream | the newest main-stream segment is older than 30 s, or the newest substream segment older than 150 s, even if the stream looks healthy (the M12 segment-age monitor) | critical |
 | `recorder_down` | frigate | Frigate's API does not answer | critical |
 | `disk_missing` | recording disk | the recording disk is not mounted | critical |

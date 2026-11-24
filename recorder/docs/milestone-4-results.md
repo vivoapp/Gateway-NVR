@@ -100,7 +100,8 @@ Nov 20 07:01:28) showed `camera_offline` for all 10 cameras at once, and one pol
 05:36:13 did the same for the 8 cameras of the 8-camera run. Recording did not stop: no gap on either
 stream of any camera, and the next poll 30 s later was clear. The health service marks every camera
 offline at once only when its call to go2rtc's stream list fails (5 s timeout): it then reads as if no
-camera sends video. Planned fix: when that call fails, report the cameras as unknown, not offline. The
+camera sends video. Fixed on Nov 24, 2026: when that call fails, the cameras show as unknown, not offline,
+until it has failed for 30 s (three unit tests in `tests/unit/test_health.py`). The
 M25 limits use alerts only to explain gaps, so these polls changed no result.
 
 ## Changes made during this milestone
@@ -120,7 +121,7 @@ Unit tests: `python3 -m unittest discover -s tests/unit` (102 pass).
 - Handoff: run `tests/handoff_check.py`, then push this branch to the Vivo repository.
 - The walkthrough call: to be scheduled.
 - Vivo's own test: a Vivo engineer deploys from docs/deploy.md and runs the matrix.
-- Health endpoint: the false offline polls (planned fix above).
+- Health endpoint: the false offline polls, fixed on Nov 24, 2026 (above).
 - M11 power test with an operator: the cut-time change above.
 - The gateway still runs the test scripts from before the date fix; they are updated with the next
   install.

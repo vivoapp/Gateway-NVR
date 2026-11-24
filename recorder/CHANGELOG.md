@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Health service (M22): when go2rtc's stream list does not answer (5 s timeout), the cameras show as
+  unknown (`online` null, no `camera_offline`) until that has lasted 30 s; before, one failed call showed
+  all 10 cameras offline while recording went on (M25 finding, known limitation 13). The Prometheus
+  output leaves `vivo_camera_online` out while unknown. Three unit tests.
 - H.264 substream for live view (Block C, M15): `cameras.yaml` takes a per-camera `hwaccel` (Frigate
   decodes that camera's detect input with it), and `tools/onvif_encoder.py` shows and sets a camera's
   encoder over ONVIF Media2 (`set` writes only with `--yes`). On the reference gateway cam01's

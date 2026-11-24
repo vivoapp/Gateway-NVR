@@ -162,3 +162,61 @@ class VideoApiAlert(unittest.TestCase):
         self.assertNotIn("video_api_down", alerts({"installed": False}))
         self.assertNotIn("video_api_down", alerts({"installed": True, "up": True}))
         self.assertIn("video_api_down", alerts({"installed": True, "up": False}))
+
+
+class StreamListFailure(unittest.TestCase):
+    """go2rtc's stream list not answering once must not show every camera offline (M25 finding)."""
+
+    def run_at(self, collector, t, streams):
+        from unittest import mock
+
+        def go2rtc(path, timeout=5):
+            if isinstance(streams, Exception):
+                raise streams
+            return streams
+
+        def frigate(path, timeout=5):
+            return {"cameras": {}} if path == "/stats" else []
+
+        with mock.patch.object(health.vivo, "go2rtc", go2rtc), mock.patch.object(health.vivo, "frigate", frigate), \
+                mock.patch.object(health, "newest_substream_end", lambda *a: None):
+            return collector.cameras(["cam01"], Path("/nonexistent"), t)["cam01"]
+
+    def stream(self, nbytes):
+        return {"cam01_main": {"producers": [{"bytes_recv": nbytes}]}}
+
+    def offline(self, cam_state, t):
+        snap = healthy()
+        snap["cameras"] = {"cam01": {**cam_state, "main_segment_age_s": 5.0, "substream_segment_age_s": 20.0}}
+        return [a for a in health.evaluate(snap, {}, t) if a["alert"] == "camera_offline"]
+
+    def test_one_failed_call_is_unknown_and_a_long_outage_is_offline(self):
+        c = health.Collector()
+        ok = self.run_at(c, 1000, self.stream(100))
+        self.assertTrue(ok["online"])
+        for t in (1010, 1020, 1030):          # failing, but for less than camera_offline_s (30 s)
+            s = self.run_at(c, t, TimeoutError("go2rtc"))
+            self.assertIsNone(s["online"])
+            self.assertIsNone(s["main_silent_s"])
+            self.assertEqual(self.offline(s, t), [])
+        late = self.run_at(c, 1040, TimeoutError("go2rtc"))   # 30 s of failures: judged again
+        self.assertFalse(late["online"])
+        self.assertEqual(len(self.offline(late, 1040)), 1)
+        back = self.run_at(c, 1050, self.stream(500))
+        self.assertTrue(back["online"])
+        self.assertIsNone(c.streams_failed_since)
+
+    def test_answer_after_one_failure_compares_with_the_bytes_before_it(self):
+        c = health.Collector()
+        self.run_at(c, 1000, self.stream(100))
+        self.run_at(c, 1010, TimeoutError("go2rtc"))
+        same = self.run_at(c, 1020, self.stream(100))    # no new bytes since 1000: silent 20 s, still online
+        self.assertTrue(same["online"])
+        self.assertEqual(same["main_silent_s"], 20.0)
+
+    def test_unknown_camera_is_left_out_of_the_metrics(self):
+        snap = healthy()
+        snap["cameras"]["cam01"]["online"] = None
+        text = health.prometheus(snap)
+        self.assertNotIn("vivo_camera_online{", text)
+        self.assertIn('vivo_segment_age_seconds{camera="cam01",stream="main"}', text)

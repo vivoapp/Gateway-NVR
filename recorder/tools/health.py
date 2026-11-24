@@ -233,6 +233,7 @@ class Collector:
         self.memory: dict = {}
         self.cpu_prev = None
         self.bytes_prev: dict[str, tuple[int, float]] = {}   # stream -> (bytes, last time they grew)
+        self.streams_failed_since: float | None = None      # when go2rtc's stream list stopped answering
         self.smart_cache: tuple[float, list] = (0.0, [])
         self.config_cache: tuple[float, dict] = (0.0, {})
         self.early_cache: tuple[tuple | None, list] = (None, [])
@@ -258,19 +259,33 @@ class Collector:
         try:
             streams = vivo.go2rtc("/streams", timeout=5)
         except Exception:
-            streams = {}
+            streams = None
+        if isinstance(streams, dict):
+            self.streams_failed_since = None
+        elif self.streams_failed_since is None:
+            self.streams_failed_since = now
+        # A failed call to go2rtc's stream list (5 s timeout) says nothing about the cameras: they are
+        # "unknown" (online null, no camera_offline alert) until it has failed for camera_offline_s,
+        # and only then judged by the bytes last seen. The M25 run had single failed calls that showed
+        # all 10 cameras offline while recording went on (milestone-4-results.md).
+        unknown = self.streams_failed_since is not None and now - self.streams_failed_since < LEVELS["camera_offline_s"]
         try:
             stats = vivo.frigate("/stats", timeout=5).get("cameras", {})
         except Exception:
             stats = {}
         out = {}
         for cam in cams:
-            info = (streams or {}).get(f"{cam}_main") if isinstance(streams, dict) else None
-            producers = (info or {}).get("producers") or []
-            b = sum(int(p.get("bytes_recv") or 0) for p in producers)
-            prev = self.bytes_prev.get(cam)
-            last_growth = now if prev is None or b > prev[0] else prev[1]
-            self.bytes_prev[cam] = (b, last_growth)
+            if unknown:
+                online, silent = None, None      # bytes_prev untouched: judged again on the next answer
+            else:
+                info = streams.get(f"{cam}_main") if isinstance(streams, dict) else None
+                producers = (info or {}).get("producers") or []
+                b = sum(int(p.get("bytes_recv") or 0) for p in producers)
+                prev = self.bytes_prev.get(cam)
+                last_growth = now if prev is None or b > prev[0] else prev[1]
+                self.bytes_prev[cam] = (b, last_growth)
+                online = bool(producers) and now - last_growth < LEVELS["camera_offline_s"]
+                silent = round(now - last_growth, 1) if producers else LEVELS["camera_offline_s"] * 2
             try:
                 segs = vivo.frigate(f"/{cam}/recordings?after={int(now) - 900}&before={int(now) + 60}&nocache={time.time_ns()}", timeout=5)
                 newest_main = max((s["end_time"] for s in segs), default=None) if isinstance(segs, list) else None
@@ -279,8 +294,8 @@ class Collector:
             newest_sub = newest_substream_end(media / "recordings" / "substream", cam, now)
             s = stats.get(cam, {})
             out[cam] = {
-                "online": bool(producers) and now - last_growth < LEVELS["camera_offline_s"],
-                "main_silent_s": round(now - last_growth, 1) if producers else LEVELS["camera_offline_s"] * 2,
+                "online": online,
+                "main_silent_s": silent,
                 "fps": s.get("camera_fps"),
                 "main_segment_age_s": round(now - newest_main, 1) if newest_main else None,
                 "substream_segment_age_s": round(now - newest_sub, 1) if newest_sub else None,
@@ -412,7 +427,8 @@ def prometheus(snap: dict) -> str:
         lines.append(f"{name}{lab} {float(value):g}")
 
     for cam, c in snap.get("cameras", {}).items():
-        m("vivo_camera_online", int(c["online"]), {"camera": cam}, "1 if the camera's main stream delivers video")
+        m("vivo_camera_online", None if c.get("online") is None else int(c["online"]), {"camera": cam},
+          "1 if the camera's main stream delivers video (left out while unknown)")
         m("vivo_camera_fps", c.get("fps"), {"camera": cam}, "frames per second Frigate receives")
         m("vivo_segment_age_seconds", c.get("main_segment_age_s"), {"camera": cam, "stream": "main"}, "age of the newest recorded segment")
         m("vivo_segment_age_seconds", c.get("substream_segment_age_s"), {"camera": cam, "stream": "substream"})
