@@ -16,7 +16,10 @@ power         cuts the gateway's power with the smart plug, waits --off seconds,
               recording. Passes when the gateway boots and records again within 180 s of power coming back,
               and at most the segment being written is lost: up to 25 s of main stream (one 10 s segment plus
               Frigate's cache) and 65 s of substream (one 60 s .part file). A file the cut left empty or
-              without its index counts as lost, and the report lists it.
+              without its index counts as lost, and the report lists it. The cut time is noted once the
+              cut is confirmed (plug command returned, or the operator pressed Enter after switching off)
+              and the power-on time just before the power is switched on, so an operator's delay can only
+              make the result look worse.
               --crash reboots at once without writing out what Linux still holds in memory, which is
               what a power cut does to unsaved writes; the SSD keeps power, so its own cache is not tested.
 full-disk     the M9 cleanup protects the system (oldest footage goes first at the safe limit) and, after
@@ -65,8 +68,29 @@ def plug(cmd: str | None, on: bool) -> None:
         res = sh(cmd, 30)
         if res.returncode:
             raise RuntimeError(f"plug command failed: {res.stderr.strip()[-200:]}")
+    elif on:
+        input(">>> switch the gateway's power ON now, then press Enter ")
     else:
-        input(f">>> switch the gateway's power {'ON' if on else 'OFF'} now, then press Enter ")
+        input(">>> switch the gateway's power OFF now; press Enter once it is off ")
+
+
+def cut_and_restore(remote: testlib.Remote, off: float, plug_off: str | None, plug_on: str | None,
+                    offset: float) -> tuple[float, float, bool]:
+    """Cut the power, wait, power on: (cut time, power-on time, went down), on the gateway's clock.
+
+    Each time is taken so that its error can only make the result look worse, never better (an
+    operator can take half a minute to act, Nov 20 2026, milestone-4-results.md):
+    - the cut time once the cut is confirmed (the plug command returned, or the operator pressed
+      Enter after switching off), so "lost before the cut" counts from the real cut or later;
+    - the power-on time just before the plug command or the operator's prompt, so the time to
+      record again counts from the real power-on or earlier."""
+    plug(plug_off, on=False)
+    t_cut = time.time() + offset
+    down = remote.wait_down(30) is not None
+    time.sleep(off)
+    t_on = time.time() + offset
+    plug(plug_on, on=True)
+    return t_cut, t_on, down
 
 
 def crash(remote: testlib.Remote) -> None:
@@ -84,23 +108,23 @@ def run_power(host: str, count: int, off: float, pause: float, plug_off: str | N
         raise RuntimeError(f"cannot reach {host} over SSH")
     events = []
     for n in range(1, count + 1):
-        t_cut, offset = remote.clock()
+        t_now, offset = remote.clock()
+        down = True
         if crash_only:
+            t_cut = t_on = t_now                         # it starts again at once
             crash(remote)
             remote.wait_down(30)
-            t_on = t_cut                                 # it starts again at once
         else:
-            plug(plug_off, on=False)
-            remote.wait_down(30)
-            time.sleep(off)
-            plug(plug_on, on=True)
-            t_on = time.time() + offset                  # on the gateway's clock
+            t_cut, t_on, down = cut_and_restore(remote, off, plug_off, plug_on, offset)
         up = remote.wait_up(600)
         print(f"power cut {n}/{count} at {vivo.utc(t_cut)}, power on {vivo.utc(t_on)}, "
               f"{'SSH back after %.0f s' % (up + offset - t_on) if up else 'SSH NOT back'}", flush=True)
-        how = "reboot without saving (sysrq b)" if crash_only else f"{off:g} s off"
+        how = "reboot without saving (sysrq b)" if crash_only else f"{off:g} s off" + ("" if plug_off else ", by an operator")
+        if not down:
+            print("    the gateway still answered 30 s after the cut was confirmed: check this cut's time", flush=True)
         events.append({"kind": "power", "n": n, "camera": "all", "t_event": f"{t_cut:.3f}", "t_restore": f"{t_on:.3f}",
-                       "note": how + ("" if up else "; SSH did not come back")})
+                       "note": how + ("" if down else "; still answered 30 s after the cut was confirmed")
+                       + ("" if up else "; SSH did not come back")})
         if not up:
             break
         remote.wait_recording(t_cut, LIMITS["power"] + 180)
@@ -150,7 +174,8 @@ def power_report(events: list[dict], planned: list[str]) -> int:
         for cam in cams:
             spans += [f"{cam} {vivo.utc(s)}" for s, en in testlib.substream_segments(cam, e["t_event"] - 120, e["t_event"] + 120)
                       if s < e["t_event"] - 2 and en > e["t_event"] + 2]
-    r.check("no substream segment was finished across a power cut", not spans, ", ".join(spans[:5]))
+    r.check("no substream segment was finished across a power cut", not spans,
+            f"{len(spans)} found (all listed below)" if spans else "")
     errors = health.fs_errors(MEDIA)
     r.check("recording filesystem: no errors logged by ext4", errors == 0, f"errors_count {errors}")
     unexplained = [g for g in res["gaps"] if g["cause"] == "UNEXPLAINED"]
@@ -170,6 +195,8 @@ def power_report(events: list[dict], planned: list[str]) -> int:
            "Files from the 2 minutes before each cut that are listed but do not play; they count as lost above.", ""]
     md += ["| Camera | Stream | File | Problem |", "|---|---|---|---|"] + [
         f"| {cam} | {stream} | {p} | {why} |" for cam, stream, p, why in damaged] if damaged else ["None."]
+    md += ["", "## Substream segments finished across a cut", ""]
+    md += [f"- {s}" for s in spans] if spans else ["None."]
     md += ["", "## Gap log", ""] + testlib.gap_table(res["gaps"])
     print("report:", vivo.write_report("m11-power", "\n".join(md) + "\n"))
     return 0 if r.passed else 1

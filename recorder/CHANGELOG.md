@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- M11 power test with an operator: the cut time is noted when the operator confirms the power is
+  off (it was noted when the runner asked, 22 to 41 s early on Nov 20), the power-on time just before
+  the power is switched on, so both can only make the result look worse; a cut the gateway still answers
+  30 s after is flagged, and the report lists every substream file that crosses a cut. Known limitation
+  14. `tests/unit/test_m11_power.py` (5 tests).
 - Health service (M22): when go2rtc's stream list does not answer (5 s timeout), the cameras show as
   unknown (`online` null, no `camera_offline`) until that has lasted 30 s; before, one failed call showed
   all 10 cameras offline while recording went on (M25 finding, known limitation 13). The Prometheus

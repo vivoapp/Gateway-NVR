@@ -20,7 +20,7 @@ as of Milestone 4; each item points to where it is explained.
 | 11 | Only the Ubuntu release, the kernel series, Docker Engine, containerd, Compose and the images are pinned | Other Ubuntu packages follow Ubuntu's security updates; Docker's packages are held | versions.env |
 | 12 | Frigate's internal API (port 5000) has no login | It is bound to 127.0.0.1; any process on the gateway can delete recordings through it | docs/m2-frigate.md |
 | 13 | When the health service's call to go2rtc's stream list fails (5 s timeout), it shows `camera_offline` for every camera at once | A false alert for one poll, while recording goes on: 7 polls in 27 hours of M25 runs, no gap behind any of them. Fixed on Nov 24, 2026: a failed call now shows the cameras as unknown (`online` null, no alert), and only a stream list that fails for 30 s or more shows them offline | docs/milestone-4-results.md |
-| 14 | No smart plug was available, so the M26 power cuts were switched by hand. With an operator, the M11 power test notes the cut time when it asks for the cut, before the power goes off | An unattended run needs a smart plug (`--plug-off`, `--plug-on`). With an operator, rebuild the report from the real cut times (`tests/m11_faults.py report --events`) until the script notes the time when the operator confirms | docs/m26-handoff.md, docs/milestone-4-results.md |
+| 14 | No smart plug was available, so the M26 power cuts were switched by hand. Until Nov 24, 2026 the M11 power test noted the cut time when it asked for the cut, before the power went off | An unattended run needs a smart plug (`--plug-off`, `--plug-on`). Fixed on Nov 24, 2026: with an operator the cut time is noted when the operator confirms the power is off, and the power-on time before the operator is asked, so both can only make the result look worse; the Nov 20 report stays rebuilt from Jorge's posts | docs/m26-handoff.md, docs/milestone-4-results.md |
 
 ## What was not tested
 
@@ -55,5 +55,5 @@ as of Milestone 4; each item points to where it is explained.
 9. Test an upgrade and a rollback of Frigate on a spare gateway before the fleet rollout (M27, M28).
 10. Size the disks from the rate M25 measures on real community scenes, not the office test scenes.
 11. Done on Nov 24, 2026: the health endpoint's false offline polls (limitation 13).
-12. In the M11 power test with an operator, note the cut time when the operator confirms the power is
-    off (limitation 14).
+12. Done on Nov 24, 2026: the M11 power test with an operator notes the cut time when the operator
+    confirms the power is off (limitation 14).

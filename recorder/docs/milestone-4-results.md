@@ -90,8 +90,11 @@ This run had 10 real power cuts, the count in the scope's plan. Milestone 3 had 
   the times of Jorge's posts (m11-events-power-20261120-corrected.csv): 6 of 6. Jorge posted "Off"
   after the power was off, so "lost before a cut" is measured from a moment a little after the real cut,
   which can only make it look larger. The first report is kept as the raw record.
-- Planned change to the script: with an operator, note the cut time when the operator confirms the
-  power is off, and list every file that crosses a cut instead of the first 5.
+- Changed in the script on Nov 24, 2026: the cut time is noted when the cut is confirmed (the operator
+  presses Enter once the power is off, or the plug command returns), the power-on time just before the
+  power is switched on, so both errors can only make the result look worse; a cut the gateway still
+  answers 30 s after is flagged; the report lists every substream file that crosses a cut, not the
+  first 5 (`tests/unit/test_m11_power.py`).
 
 ### Health endpoint: false offline polls
 
