@@ -190,3 +190,34 @@ blocking one camera for 6 s three times gave 108, 52 and 102 s without main-stre
 substream (our archiver) lost only the 6 s. The same happened on Nov 2, when a 6 s drop of the
 gateway's network link left a 111 s gap. The health endpoint already raises `recording_gap` for it;
 the planned fix is to restart that camera's recorder from the health service after about 30 s.
+
+## F13: switching a camera's codec while it records loses that camera's unfinished substream segment (Nov 24, 2026)
+
+On Nov 24 cam01's substream was switched from H.265 to H.264 over ONVIF at 12:20:40 UTC, and the
+recorder was restarted 2 s later to load the new decoder setting. Nine cameras lost about 35 s of
+substream, the restart itself. cam01 lost 76 s: the segment it had started at 12:20:01 was deleted
+at the next start (`deleting cam01_20261124T122001Z.mp4.part: left by an earlier ffmpeg`).
+
+What happened: the camera restarted its stream when its codec changed, and go2rtc reconnected to it
+(`RTP: PT=61: bad cseq` in cam01's log at 12:20:41). cam01's ffmpeg then logged nothing more. At the
+stop (12:20:42) the archiver sent every ffmpeg SIGINT. Nine finished their segment and the archiver
+renamed it. cam01's did not finish within Docker's 20 s stop timeout and was killed, which leaves a
+`.part` file that the next start deletes, as designed (an unfinished file is never renamed).
+
+Tested on the workstation (ffmpeg 8.1, the archiver's RTSP over TCP and MP4 settings, the sender
+frozen in the middle of the stream with its connection left open):
+- One SIGINT: ffmpeg stays blocked in the read and never finishes the segment, as cam01 did.
+- A second SIGINT: ffmpeg exits at once, but it also gives up writing the end of the file ("Error
+  writing trailer: Immediate exit requested"), so the segment is not saved either.
+- The unfinished `.part` held 48 bytes after 8 s of video: ffmpeg keeps the segment's video in
+  memory until it finishes the file, so there is no playable part to keep.
+- A 3 s socket timeout did not end the blocked read.
+
+Decision: no change to the archiver. Keeping unfinished segments would need fragmented MP4, a change
+to the agreed format (docs/SEGMENT_FORMAT.md) and to Haris's uploader, for a rare event. Instead,
+change a camera's encoder (codec, resolution, frame rate, keyframes) only while the recorder is
+stopped: `sudo systemctl stop vivo-gateway`, then `tools/onvif_encoder.py set ... --yes` for each
+camera, then start it again (`gateway/setup.sh --only stack` when the decoder setting changes too).
+Every ffmpeg then finishes its segment before the streams change, and all cameras pause together for
+about a minute. A stream that breaks without a planned change is still caught by the archiver's
+stall watchdog (3.5 segment lengths), as before.

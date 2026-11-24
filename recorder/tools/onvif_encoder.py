@@ -9,6 +9,10 @@ changed; everything else (resolution, multicast, quality) is sent back as the ca
 It runs on the gateway, where the camera login is (/etc/vivo/secrets.env); nothing secret is printed.
 Without --yes, `set` only prints what it would send.
 
+Change an encoder only while the recorder is stopped (`sudo systemctl stop vivo-gateway`, then
+set, then start it again): a camera whose stream changes while it records loses its unfinished
+substream segment (docs/findings.md F13).
+
 usage:
   sudo tools/onvif_encoder.py show --cam cam01 [--config 0002]
   sudo tools/onvif_encoder.py set  --cam cam01 --config 0002 --encoding H264 --profile Baseline \\
