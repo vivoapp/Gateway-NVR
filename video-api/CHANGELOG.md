@@ -24,6 +24,9 @@
   settings and adds the ones it lacks from `video-api.env.example`. Before, a file left with only a
   comment (the reference gateway's, emptied on Oct 27) kept the API on its built-in defaults,
   including the gateway id `vivo-gw` instead of the host name.
+- Live gate fix (Nov 24, 2026, findings F11): the request folder belongs to root with the API's
+  group allowed to write, so `vivo-live-gate`, which runs with network rights only, can read it; it
+  now says once when it cannot. Found by the first M15 run on the gateway (the cut did not happen).
 - Gateway test fixes (Nov 22, 2026, found on the reference gateway with real recordings):
   - Playback over more than about 3 hours failed with `upstream_unavailable`: Frigate's video module
     refuses one playlist of more than about 1,100 pieces. The Frigate adapter now asks for one part

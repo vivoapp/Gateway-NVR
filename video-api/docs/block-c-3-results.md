@@ -15,8 +15,8 @@ The reports are in [test-reports/block-c](test-reports/block-c/README.md).
 
 | Done when (contract section 13) | Lab (Nov 8) | Evidence | Gateway / remote |
 |---|---|---|---|
-| First frame on the building network within 2 s (median of 10) | Pass: median 0.53 s, 10 of 10 played | `m15-live-lab-20261108T063719` | to run |
-| A refused renewal cuts the video | Pass: renewal refused (403), video stopped 0.46 s later, go2rtc dropped the viewer within 4 s | `m15-live-lab-20261108T063719` | to run |
+| First frame on the building network within 2 s (median of 10) | Pass: median 0.53 s, 10 of 10 played | `m15-live-lab-20261108T063719` | Over the VPN (Nov 24, cam01 H.264 substream, about 340 ms round trip): median 2.00 s, 10 of 10 played (`m15-live-gateway-vpn-20261124T123921`); the building-network run is still to do |
+| A refused renewal cuts the video | Pass: renewal refused (403), video stopped 0.46 s later, go2rtc dropped the viewer within 4 s | `m15-live-lab-20261108T063719` | **Pass** over the VPN (Nov 24): renewal refused, video stopped 363 ms later, drop rule removed 6 s after (`m15-live-gateway-vpn-20261124T123921`), after fixing F11 (the first run failed) |
 | Through TURN within 5 s (median of 10) | Relayed path works in the lab: 0.5 to 1.5 s over 5 attempts (coturn, UDP). The 10-attempt run then failed because of findings F4; fixed, re-run pending | lab check, Nov 8; `m15-live-lab-turn-20261108T064311` (before the fix) | remote test with Vivo's server |
 | From outside the site within 3 s direct; packet captures show the path | Needs a public server and a phone on cellular | `tests/m15_capture.sh` ready | remote test |
 | Limits answer 429 | Pass (unit tests: per-site remote limit and per-camera viewer limit) | `tests/unit/test_live.py` | in `m15_load` |

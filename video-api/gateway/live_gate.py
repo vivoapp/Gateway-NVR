@@ -72,6 +72,7 @@ class Gate:
         self.run = run
         self.clock = clock
         self.active: dict[tuple[str, int], int] = {}
+        self.unreadable = False   # said once, so a folder this service cannot read is never silent
 
     def _ipt(self, binary: str, args: list[str]) -> bool:
         r = self.run([binary, "-w", "5", *args], capture_output=True, text=True)
@@ -115,7 +116,20 @@ class Gate:
     def step(self) -> None:
         now = self.clock()
         if self.requests.is_dir():
-            for p in sorted(self.requests.glob("*.json")):
+            # Listed with iterdir, not glob: glob returns nothing on "Permission denied", and this
+            # service runs without CAP_DAC_OVERRIDE, so the folder must be root's (tmpfiles).
+            try:
+                files = sorted(p for p in self.requests.iterdir() if p.suffix == ".json")
+            except OSError as e:
+                if not self.unreadable:
+                    print(f"{TAG}: cannot read {self.requests} ({e.strerror}); no viewer can be cut", flush=True)
+                self.unreadable = True
+                files = []
+            else:
+                if self.unreadable:
+                    print(f"{TAG}: {self.requests} readable again", flush=True)
+                self.unreadable = False
+            for p in files:
                 try:
                     text = p.read_text()
                     p.unlink()

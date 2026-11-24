@@ -80,3 +80,20 @@ of 1.61 s (slowest 2.62 s). A start is several requests one after another (the p
 playlist, the header, the first pieces), so the distance to the site adds up. On the building
 network, or near the site, the figures are close to the gateway's. Playlists are gzipped (a 24-hour
 playlist lists 8,640 pieces), which keeps the playlist step short.
+
+## F11: the live gate could not read its request folder (gateway, Nov 24, 2026)
+
+The first M15 run on the gateway (over the VPN, cam01's new H.264 substream) played 10 of 10, but
+the revocation check failed: the renewal was refused (403) and the video kept playing. The Video API
+had written every cut request, and `vivo-live-gate` never read one. The helper runs as root with only
+`CAP_NET_ADMIN` and `CAP_NET_RAW`, and the request folder belonged to the API's user with mode 0700.
+Root without `CAP_DAC_OVERRIDE` cannot open another user's private folder, and `Path.glob` returns
+nothing on "Permission denied", so the helper stayed silent. The lab did not show it because there
+the helper runs inside go2rtc's container as full root (`--lab`).
+
+Fixed: `requests/` now belongs to root with group 10001 (the API) allowed to write (mode 0770,
+`gateway/files/vivo-live-gate.tmpfiles`), so the helper reads it as its owner and keeps its narrow
+rights. The helper lists the folder with `iterdir` and says once when it cannot read it. Two unit
+tests cover both. Applied on the gateway at 12:38 UTC (tmpfiles, helper restarted; recording and the
+API untouched); the re-run passed: renewal refused, video stopped 363 ms later, the drop rule removed
+6 s after the cut (reports `m15-live-gateway-vpn-20261124T123425.md` before, `...T123921.md` after).

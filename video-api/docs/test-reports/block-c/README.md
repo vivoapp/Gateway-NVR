@@ -23,6 +23,8 @@ pictures or grants.
 | m14-check-lab-20261108-061624.md | M14, 21 of 21 |
 | m15-live-lab-20261108T063719.md | M15 on the building network: first frame and the cut on a refused renewal |
 | m15-live-lab-turn-20261108T064311.md | M15 through TURN, 0 of 10: the run that showed findings F4 (relay ports reused); fixed, re-run pending with Vivo's server |
+| m15-live-gateway-vpn-20261124T123425.md | M15 on the gateway over the VPN, cam01 H.264 substream: first frame 10 of 10 (median 1.91 s), the cut failed (findings F11) |
+| m15-live-gateway-vpn-20261124T123921.md | The same after the F11 fix: first frame median 2.00 s, video stopped 363 ms after the refused renewal |
 | m16-playback-lab-20261108T061936.md | M16, 14 minutes of footage |
 | m17-clips-lab-20261108-062240.md | M17, with the keep time set to 60 s |
 

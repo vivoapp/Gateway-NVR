@@ -103,3 +103,34 @@ def test_release_lifts_the_drop_early(tmp_path):
     (tmp_path / "requests" / "2.json").write_text(json.dumps({"ip": "198.51.100.9", "port": 49170, "release": True}))
     g.step()
     assert fake.rules == [] and g.active == {}
+
+
+def test_unreadable_folder_is_reported_once(tmp_path, capsys):
+    # F11: on the gateway the folder was the API's (mode 0700) and this root service, without
+    # CAP_DAC_OVERRIDE, could not list it; glob hid that and no viewer was ever cut.
+    import os
+    if os.geteuid() == 0:
+        pytest.skip("root can read any folder")
+    fake = FakeIptables()
+    g = live_gate.Gate(tmp_path, 8555, run=fake, clock=lambda: NOW)
+    req = tmp_path / "requests"
+    req.mkdir()
+    (req / "a.json").write_text(json.dumps({"ip": "203.0.113.7", "port": 51234, "until": 1120}))
+    req.chmod(0o000)
+    try:
+        g.step()
+        g.step()
+    finally:
+        req.chmod(0o700)
+    out = capsys.readouterr().out
+    assert out.count("cannot read") == 1 and fake.rules == []
+    g.step()
+    assert "readable again" in capsys.readouterr().out and len(fake.rules) == 4
+
+
+def test_request_folder_belongs_to_root():
+    # The gate runs as root with only CAP_NET_ADMIN and CAP_NET_RAW: it must own the folder,
+    # and the API (10001) writes through the group.
+    lines = [l.split() for l in (ROOT / "gateway" / "files" / "vivo-live-gate.tmpfiles").read_text().splitlines()
+             if l.startswith("d ") and l.split()[1].endswith("/requests")]
+    assert lines == [["d", "/run/vivo-live-gate/requests", "0770", "root", "10001", "-"]]
