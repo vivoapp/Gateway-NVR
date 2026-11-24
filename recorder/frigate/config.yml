@@ -48,6 +48,7 @@ cameras:
         input_args: preset-rtsp-restream
         roles:
         - detect
+        hwaccel_args: preset-intel-qsv-h264
       output_args:
         record: preset-record-generic-audio-aac
   cam02:

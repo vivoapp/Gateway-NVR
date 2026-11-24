@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- H.264 substream for live view (Block C, M15): `cameras.yaml` takes a per-camera `hwaccel` (Frigate
+  decodes that camera's detect input with it), and `tools/onvif_encoder.py` shows and sets a camera's
+  encoder over ONVIF Media2 (`set` writes only with `--yes`). On the reference gateway cam01's
+  substream is H.264 since Nov 24 2026, 12:21 UTC (the camera keeps the Main profile); the other
+  9 cameras stay H.265 until the 24-hour measurement is agreed. `docs/SEGMENT_FORMAT.md` change log.
 - Docker pin: `docker-ce-rootless-extras` is now installed by name at `DOCKER_CE_VERSION` and held, with
   `uidmap`, `dbus-user-session` and `acl` (the cloud uploader's rootless Docker needs them; asked by Haris
   on Nov 23 2026). It had come in as a dependency at a newer version and was not held. `tests/m1_check.sh`

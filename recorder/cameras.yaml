@@ -29,8 +29,12 @@ cameras:
     name: VIVO-CAM-01
     host: 192.168.30.201
     port: 554
-    main_path: /media/live/1/1  # H.264 2880x1620 25 fps 6000 kbps, GOP 100 (ONVIF profile 0001)
-    sub_path: /media/live/1/2   # H.264 640x360 25 fps 500 kbps (profile 0002)
+    main_path: /media/live/1/1  # H.265 2880x1620 25 fps 6000 kbps, GOP 100 (ONVIF profile 0001)
+    # Substream switched to H.264 for live view (Block C, M15; tools/onvif_encoder.py), the first camera:
+    # H.264 Main 640x360 15 fps (Baseline was asked; the camera keeps Main), a keyframe every 15 frames,
+    # at most 512 kbps (profile 0002). Live on the reference gateway since 2026-11-24 12:21 UTC.
+    sub_path: /media/live/1/2
+    hwaccel: preset-intel-qsv-h264   # its substream is H.264; the site default decodes H.265
     credentials: VIVOCAM       # -> VIVOCAM_USER / VIVOCAM_PASSWORD
     audio: aac                 # camera sends G.711 8 kHz, so transcode to AAC for MP4
     model: "A_ONVIF_CAMERA N501"
