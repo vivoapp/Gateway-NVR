@@ -67,6 +67,42 @@ media_fstab_source() { # <fstab file> <mount point>
 label_disk_count() { # <LABEL=name>
   { blkid -t "$1" -o device 2>/dev/null || true; } | wc -l | tr -d ' '
 }
+# Docker's settings file: our keys (gateway/files/daemon.json) over the keys already in the file.
+# Mender images set "data-root": "/data/docker" there, so Docker's data stays on /data and not on
+# the A/B root partitions; writing our file over it would move Docker back to /var/lib/docker.
+# Prints the existing file unchanged when it already has our values, our file when there is nothing
+# else to keep; stops (and prints nothing) when the existing file is not a JSON object.
+docker_daemon_json() { # <existing file> <our file> ; result on stdout
+  python3 - "$1" "$2" <<'PY'
+import json, sys
+path, ours_path = sys.argv[1], sys.argv[2]
+with open(ours_path) as f:
+    ours_text = f.read()
+ours = json.loads(ours_text)
+try:
+    with open(path) as f:
+        text = f.read()
+except FileNotFoundError:
+    sys.stdout.write(ours_text)
+    sys.exit(0)
+try:
+    existing = json.loads(text) if text.strip() else {}
+except ValueError as e:
+    sys.exit(f"{path} is not valid JSON ({e}); fix or remove it, then run again")
+if not isinstance(existing, dict):
+    sys.exit(f"{path} is not a JSON object; fix or remove it, then run again")
+merged = {**existing, **ours}
+kept = [k for k in existing if k not in ours]
+if kept:
+    print(f"    kept from {path}: {', '.join(kept)}", file=sys.stderr)
+if merged == existing:
+    sys.stdout.write(text)
+elif merged == ours:
+    sys.stdout.write(ours_text)
+else:
+    sys.stdout.write(json.dumps(merged, indent=2) + "\n")
+PY
+}
 
 while (( $# )); do
   case "$1" in
@@ -204,7 +240,12 @@ EOF
   # docker-ce-rootless-extras, uidmap, dbus-user-session and acl: the cloud uploader's rootless Docker
   # (cloud/, M19 and M20) needs them. The extras follow docker-ce's version; the other three are Ubuntu's.
   run apt-mark hold docker-ce docker-ce-cli containerd.io docker-compose-plugin docker-ce-rootless-extras
-  put_file /etc/docker/daemon.json 644 < "$REPO/gateway/files/daemon.json"
+  # Merge, not overwrite: keep data-root and any other key the image or an admin set (see
+  # docker_daemon_json). Captured first, so a bad existing file stops the step before anything is written.
+  local daemon
+  daemon="$(docker_daemon_json /etc/docker/daemon.json "$REPO/gateway/files/daemon.json")" \
+    || die "cannot merge /etc/docker/daemon.json (see the message above)"
+  printf '%s\n' "$daemon" | put_file /etc/docker/daemon.json 644
 
   # Start Docker after the recording disk is mounted (but still start without it,
   # so go2rtc live view keeps working and Frigate reports the missing disk).

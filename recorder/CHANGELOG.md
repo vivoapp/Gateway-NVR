@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Mender images (M27): `gateway/setup.sh` merges its Docker log limits and `live-restore` into
+  `/etc/docker/daemon.json` instead of writing over the file, so the image's `"data-root": "/data/docker"`
+  (and any other key) is kept; before, a run would have moved Docker's data back to the root partition.
+  Our values win where both set a key; a file that already has them is left as it is; a file that is not
+  a JSON object stops the step before anything is written. Found on the test N150 on Nov 25 2026.
+  `tests/unit/test_setup_daemon_json.py` (8 tests).
 - M11 power test with an operator: the cut time is noted when the operator confirms the power is
   off (it was noted when the runner asked, 22 to 41 s early on Nov 20), the power-on time just before
   the power is switched on, so both can only make the result look worse; a cut the gateway still answers

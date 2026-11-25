@@ -125,7 +125,8 @@ sudo gateway/setup.sh --format-disk /dev/sdX                # ERASES /dev/sdX; a
 | later, more space | `--add-disk /dev/sdY` grows the LVM volume onto another disk while recording (erases that disk) |
 
 setup.sh then sets the clock to UTC with chrony (also serving time to the cameras), installs the
-pinned Docker, mounts the recording disk by UUID with `nofail` (or keeps an existing `LABEL=vivo-media`
+pinned Docker (its log limits are merged into `/etc/docker/daemon.json`, so a `data-root` already
+there, as in the Mender image, is kept), mounts the recording disk by UUID with `nofail` (or keeps an existing `LABEL=vivo-media`
 entry, as in the Mender image; the empty mount point is made immutable, so nothing is ever written
 to the OS disk by mistake), switches SSH to keys only, sets
 the firewall (LAN only, Docker ports included), installs the stack in `/opt/vivo-gateway` with its
